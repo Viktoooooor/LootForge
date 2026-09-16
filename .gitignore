@@ -1,0 +1,17 @@
+# zavislosti (projekt zadne nema, ale kdyby nekdo spustil npm)
+node_modules/
+
+# logy a docasne soubory ze spousteni a testu
+*.log
+*.tmp
+.tok*
+
+# systemove soubory
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# mistni nastaveni editoru a Claude Code
+.vscode/
+.idea/
+.claude/settings.local.json

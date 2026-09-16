@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hextech Gamba</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="reel.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">HEXTECH<em>GAMBA</em></div>
+  <div class="wallet" id="wallet"></div>
+  <div class="conn" id="conn" title="Stav pripojeni ke klientovi">
+    <span class="dot"></span><span class="conn-label">pripojuji…</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab-btn is-active" data-tab="chests">Bedny <span class="pill" data-count="chests">0</span></button>
+  <button class="tab-btn" data-tab="skins">Skin shardy <span class="pill" data-count="skins">0</span></button>
+  <button class="tab-btn" data-tab="champs">Champion shardy <span class="pill" data-count="champs">0</span></button>
+  <button class="tab-btn" data-tab="other">Ostatni <span class="pill" data-count="other">0</span></button>
+  <button class="tab-btn" data-tab="shop">Mythic shop <span class="pill" data-count="shop">-</span></button>
+  <button class="tab-btn" data-tab="session">Session</button>
+  <button class="ghost-btn" id="refresh" title="Znovu nacist loot z klienta">Obnovit</button>
+</nav>
+
+<main>
+  <section class="panel is-active" data-panel="chests">
+    <div class="panel-head">
+      <div>
+        <h2>Bedny, kapsle &amp; orby</h2>
+        <p class="sub" id="chests-sub">Vse, co jde otevrit.</p>
+      </div>
+      <button class="big-btn" id="open-all" disabled>Otevrit vse</button>
+    </div>
+    <div class="groups" id="grid-chests"></div>
+  </section>
+
+  <section class="panel" data-panel="skins">
+    <div class="panel-head">
+      <div>
+        <h2>Skin shardy</h2>
+        <p class="sub">Shardy odemkni za oranzovou esenci, rozloz je, nebo rerolluj 3 za nahodny skin.</p>
+      </div>
+      <div class="filters">
+        <button class="ghost-btn" id="reroll-mode" title="Tri skin shardy za jeden nahodny skin natrvalo">Reroll</button>
+        <button class="ghost-btn" data-select="all" data-scope="skins">Vybrat vse</button>
+        <button class="ghost-btn" data-select="owned" data-scope="skins">Jen uz vlastnene</button>
+        <button class="ghost-btn" data-select="none" data-scope="skins">Zrusit vyber</button>
+      </div>
+    </div>
+    <div class="groups" id="grid-skins"></div>
+  </section>
+
+  <section class="panel" data-panel="champs">
+    <div class="panel-head">
+      <div>
+        <h2>Champion shardy</h2>
+        <p class="sub">Shardy jsou k odemceni, permanenty uz mas. Oboji jde rozlozit na modrou esenci.</p>
+      </div>
+      <div class="filters">
+        <button class="ghost-btn" data-select="all" data-scope="champs">Vybrat vse</button>
+        <button class="ghost-btn" data-select="owned" data-scope="champs">Jen uz vlastnene</button>
+        <button class="ghost-btn" data-select="none" data-scope="champs">Zrusit vyber</button>
+      </div>
+    </div>
+    <div class="groups" id="grid-champs"></div>
+  </section>
+
+  <section class="panel" data-panel="shop">
+    <div class="panel-head">
+      <div>
+        <h2>Mythic shop</h2>
+        <p class="sub">Prestige skiny, chromy, ikony a emoty za mythic esenci. Nabidka se toci podle rotaci.</p>
+      </div>
+      <div class="shop-balance" id="shop-balance"></div>
+    </div>
+    <div class="groups" id="grid-shop"><div class="empty">Nacitam obchod…</div></div>
+  </section>
+
+  <section class="panel" data-panel="other">
+    <div class="panel-head">
+      <div>
+        <h2>Ostatni loot</h2>
+        <p class="sub">Ward skiny, emoty, materialy a vsechno, co nezapadlo jinam.</p>
+      </div>
+    </div>
+    <div class="groups" id="grid-other"></div>
+  </section>
+
+  <section class="panel" data-panel="session">
+    <div class="panel-head">
+      <div>
+        <h2>Tahle session</h2>
+        <p class="sub">Co ti dneska vypadlo a co te to stalo.</p>
+      </div>
+      <button class="ghost-btn" id="clear-session">Vymazat historii</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="history" id="history"></div>
+  </section>
+</main>
+
+<!-- lista akci pro vybrane shardy -->
+<div class="actionbar" id="actionbar" hidden>
+  <span class="ab-count" id="ab-count"></span>
+  <span class="ab-value" id="ab-value"></span>
+  <div class="ab-buttons">
+    <button class="ghost-btn" id="ab-clear">Zrusit</button>
+    <button class="big-btn danger" id="ab-disenchant">Rozlozit</button>
+  </div>
+</div>
+
+<!-- reroll: zasobnik se tremi sloty -->
+<div class="rr-tray" id="rr-tray" hidden>
+  <div class="rr-slots" id="rr-slots"></div>
+  <div class="rr-info">
+    <b>REROLL</b>
+    <span id="rr-hint">Vyber 3 skin shardy.</span>
+  </div>
+  <div class="ab-buttons">
+    <button class="ghost-btn" id="rr-suggest" title="Vybere tri nejlevnejsi shardy, duplikaty maji prednost">Navrhnout 3</button>
+    <button class="ghost-btn" id="rr-cancel">Zrusit</button>
+    <button class="big-btn" id="rr-go" disabled>Rerollnout</button>
+  </div>
+</div>
+
+<!-- odhaleni odmen -->
+<div class="reveal" id="reveal" hidden>
+  <div class="reveal-gate"><i class="gate-top"></i><i class="gate-bot"></i><i class="gate-line"></i></div>
+  <div class="reveal-inner">
+    <h3 id="reveal-title">Otevirani…</h3>
+    <div class="reveal-cards" id="reveal-cards"></div>
+    <div class="reveal-foot">
+      <button class="ghost-btn sfx-btn" id="sfx-toggle">Zvuk</button>
+      <button class="ghost-btn fast-btn" id="fast-toggle" title="Zkracene animace pro hromadne otevirani">Rychle</button>
+      <button class="ghost-btn" id="reveal-skip" hidden>Preskocit animaci</button>
+      <button class="big-btn" id="reveal-close" hidden>Hotovo</button>
+    </div>
+  </div>
+</div>
+
+<!-- detail skinu / sampiona: cely splash a skiny, ktere na nej uz mas -->
+<div class="detail" id="detail" hidden>
+  <div class="detail-box" id="detail-box">
+    <button class="detail-close" id="detail-close" title="Zavrit (Esc)">&times;</button>
+    <div class="detail-art" id="detail-art">
+      <img id="detail-img" alt="">
+      <div class="detail-video" id="detail-video"></div>
+      <div class="detail-caption" id="detail-caption"></div>
+    </div>
+    <div class="detail-info" id="detail-info"></div>
+    <div id="detail-skins"></div>
+  </div>
+</div>
+
+<!-- potvrzeni nevratnych akci -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-box">
+    <h3 id="modal-title"></h3>
+    <p id="modal-text"></p>
+    <div id="modal-extra"></div>
+    <div class="modal-buttons">
+      <button class="ghost-btn" id="modal-cancel">Zpet</button>
+      <button class="big-btn danger" id="modal-ok">Potvrdit</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="reel.js"></script>
+<script src="simulator.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

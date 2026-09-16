@@ -1,0 +1,603 @@
+/* Hextech animace odmen - vzhled.
+   Rozmery dlazdic pocita JS a posila je sem v --tw / --th / --rh.
+   Barvu rarity nese --win, taky z JS. */
+
+.reel-host { width: 100%; margin: 0 auto 20px; }
+
+/* celoobrazovkovy rezim - reveal prestane byt uzky sloupec */
+.reveal.is-cinematic .reveal-inner {
+  /* 100vw by pocitalo i se svislym posuvnikem a vyrobilo vodorovny */
+  width: 100%; max-width: 100%; padding: 0 0 10px;
+}
+.reveal.is-cinematic .reveal-cards { margin-bottom: 14px; }
+
+/* zare v barve rarity za celou scenou */
+.cine-glow {
+  /* vodorovne drzet v mantinelech, at nedela posuvnik */
+  position: absolute; inset: -20% 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, var(--win) 0%, transparent 62%);
+  opacity: 0; animation: glow-in 1.2s .4s ease-out forwards;
+}
+@keyframes glow-in { to { opacity: .16; } }
+
+/* ====================================================================== */
+/*  RULETA                                                                */
+/* ====================================================================== */
+
+.reel-stage {
+  position: relative; width: 100%;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.reel-stage.is-hit, .cascade-stage.is-hit { animation: stage-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes stage-shake {
+  0%, 100% { transform: translate(0,0); }
+  12% { transform: translate(-11px, 5px); }
+  26% { transform: translate(10px, -6px); }
+  42% { transform: translate(-7px, -4px); }
+  58% { transform: translate(6px, 5px); }
+  74% { transform: translate(-4px, -2px); }
+  88% { transform: translate(3px, 1px); }
+}
+
+.reel-row { position: relative; z-index: 1; height: var(--rh, 132px); }
+
+.reel-window {
+  position: relative; height: 100%; overflow: hidden;
+  border-top: 1px solid var(--gold); border-bottom: 1px solid var(--gold);
+  background:
+    repeating-linear-gradient(115deg, rgba(200,170,110,.05) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #0b1a26, #060c12);
+  box-shadow: inset 0 0 60px rgba(0,0,0,.9);
+  transition: box-shadow .5s ease, border-color .5s ease, transform .3s ease;
+}
+
+.reel-window.is-charging { animation: charge-breathe .75s ease-in-out both; }
+@keyframes charge-breathe {
+  0%   { transform: scaleY(1);    box-shadow: inset 0 0 60px rgba(0,0,0,.9); }
+  60%  { transform: scaleY(.94);  box-shadow: inset 0 0 80px rgba(0,0,0,.95), 0 0 70px rgba(200,170,110,.45); }
+  100% { transform: scaleY(1.02); box-shadow: inset 0 0 60px rgba(0,0,0,.9), 0 0 50px rgba(200,170,110,.28); }
+}
+
+.reel-window.is-closing {
+  border-color: var(--win);
+  box-shadow: inset 0 0 70px rgba(0,0,0,.92), 0 0 90px -20px var(--win);
+}
+.reel-window.is-done .reel-tile { transition: opacity .45s ease, filter .45s ease; }
+.reel-window.is-done .reel-tile:not(.landed) { opacity: .28; filter: grayscale(.7); }
+
+.reel-strip {
+  position: absolute; left: 0;
+  top: calc((var(--rh, 132px) - var(--th, 100px)) / 2);
+  display: flex; gap: 12px;
+  will-change: transform, filter;
+}
+
+.reel-tile {
+  position: relative;
+  flex: 0 0 var(--tw, 168px); width: var(--tw, 168px); height: var(--th, 100px);
+  background: #0a1119; border: 1px solid var(--line); border-radius: 3px; overflow: hidden;
+}
+.reel-tile img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .8; }
+.reel-tile-name {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 16px 8px 6px;
+  background: linear-gradient(180deg, transparent, rgba(4,8,12,.95));
+  font-size: 12px; color: var(--text); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reel-tile::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--r-default); z-index: 2;
+}
+.reel-tile.rare-EPIC::before      { background: var(--r-epic); }
+.reel-tile.rare-LEGENDARY::before { background: var(--r-legendary); }
+.reel-tile.rare-MYTHIC::before    { background: var(--r-mythic); }
+.reel-tile.rare-ULTIMATE::before  { background: var(--r-ultimate); }
+.reel-tile.rare-TRANSCENDENT::before  { background: var(--r-transcendent); }
+.reel-tile.rare-EXALTED::before  { background: var(--r-exalted); }
+.reel-tile.rare-EPIC      { box-shadow: inset 0 -34px 44px -34px var(--r-epic); }
+.reel-tile.rare-LEGENDARY { box-shadow: inset 0 -34px 44px -34px var(--r-legendary); }
+.reel-tile.rare-MYTHIC    { box-shadow: inset 0 -34px 44px -34px var(--r-mythic); }
+.reel-tile.rare-ULTIMATE  { box-shadow: inset 0 -34px 44px -34px var(--r-ultimate); }
+.reel-tile.rare-TRANSCENDENT  { box-shadow: inset 0 -34px 44px -34px var(--r-transcendent); }
+.reel-tile.rare-EXALTED  { box-shadow: inset 0 -34px 44px -34px var(--r-exalted); }
+
+.reel-tile.landed {
+  animation: tile-land .55s cubic-bezier(.2,.9,.3,1.5) forwards;
+  z-index: 3; opacity: 1 !important; filter: none !important;
+  box-shadow: 0 0 40px var(--win), 0 0 0 1px var(--win) inset;
+}
+.reel-tile.landed img { opacity: 1; }
+@keyframes tile-land {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.16); }
+  75%  { transform: scale(1.03); }
+  100% { transform: scale(1.08); }
+}
+
+.reel-marker {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 2px; margin-left: -1px; z-index: 6; pointer-events: none;
+  background: linear-gradient(180deg, var(--gold), rgba(240,230,210,.95), var(--gold));
+  box-shadow: 0 0 14px rgba(200,170,110,.9);
+  transition: box-shadow .4s ease;
+}
+.reel-window.is-charging .reel-marker,
+.reel-window.is-closing  .reel-marker { box-shadow: 0 0 30px var(--gold), 0 0 70px rgba(200,170,110,.6); }
+.reel-marker::before, .reel-marker::after {
+  content: ''; position: absolute; left: 50%; margin-left: -9px;
+  border-left: 9px solid transparent; border-right: 9px solid transparent;
+}
+.reel-marker::before { top: 0;    border-top: 12px solid var(--gold); }
+.reel-marker::after  { bottom: 0; border-bottom: 12px solid var(--gold); }
+
+.reel-scan {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(10,200,185,.16) 50%, transparent 65%);
+}
+.reel-window.is-spinning .reel-scan { opacity: 1; animation: scan 1.1s linear infinite; }
+@keyframes scan { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+
+.reel-fade { position: absolute; top: 0; bottom: 0; width: 16vw; z-index: 5; pointer-events: none; }
+.reel-fade.left  { left: 0;  background: linear-gradient(90deg, #05090e 6%, transparent); }
+.reel-fade.right { right: 0; background: linear-gradient(270deg, #05090e 6%, transparent); }
+
+.reel-flash, .unlock-flash {
+  position: absolute; inset: 0; z-index: 8; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, #fff 0%, var(--win) 38%, transparent 70%);
+}
+.reel-window.is-done .reel-flash { animation: flash .55s ease-out both; }
+@keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+
+.reel-shock, .unlock-shock {
+  position: absolute; top: 50%; left: 50%; z-index: 7; pointer-events: none;
+  width: 110px; height: 110px; margin: -55px 0 0 -55px;
+  border: 2px solid var(--win); border-radius: 50%; opacity: 0;
+}
+.reel-window.is-done .reel-shock { animation: shock .8s cubic-bezier(.1,.7,.3,1) both; }
+@keyframes shock {
+  0%   { opacity: .9; transform: scale(.3); border-width: 3px; }
+  100% { opacity: 0;  transform: scale(5); border-width: 1px; }
+}
+
+.fx-shards { position: absolute; top: 50%; left: 50%; z-index: 9; pointer-events: none; }
+.fx-shards i { position: absolute; background: var(--r-default); transform: rotate(45deg); animation: shard 1.1s ease-out forwards; }
+.fx-shards.rare-EPIC i      { background: var(--r-epic); }
+.fx-shards.rare-LEGENDARY i { background: var(--r-legendary); }
+.fx-shards.rare-MYTHIC i    { background: var(--r-mythic); }
+.fx-shards.rare-ULTIMATE i  { background: var(--r-ultimate); }
+.fx-shards.rare-TRANSCENDENT i  { background: var(--r-transcendent); }
+.fx-shards.rare-EXALTED i  { background: var(--r-exalted); }
+@keyframes shard {
+  0%   { opacity: 1; transform: translate(0,0) rotate(45deg) scale(1.15); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(300deg) scale(.25); }
+}
+
+/* ====================================================================== */
+/*  STRANA S RARITOU A ODHALENI                                          */
+/* ====================================================================== */
+
+.rface {
+  --rc: var(--r-default);
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6%;
+  background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--rc) 50%, #0a1119) 0%, #070c12 78%);
+  border-top: 3px solid var(--rc);
+  box-shadow: inset 0 0 30px color-mix(in srgb, var(--rc) 30%, transparent);
+}
+.rface.rare-EPIC         { --rc: var(--r-epic); }
+.rface.rare-LEGENDARY    { --rc: var(--r-legendary); }
+.rface.rare-MYTHIC       { --rc: var(--r-mythic); }
+.rface.rare-ULTIMATE     { --rc: var(--r-ultimate); }
+.rface.rare-TRANSCENDENT { --rc: var(--r-transcendent); }
+.rface.rare-EXALTED      { --rc: var(--r-exalted); }
+.rface.rare-DEFAULT {
+  background: linear-gradient(160deg, #121c27, #080d13);
+  box-shadow: inset 0 0 22px rgba(0,0,0,.6);
+}
+
+/* drahokam: prebit obecne .reel-tile img / .flip-front img, ktere roztahuji na celou plochu */
+.rface .rface-gem {
+  width: auto; height: 44%; max-height: 66px; object-fit: contain;
+  opacity: 1; padding: 0; background: none;
+  filter: drop-shadow(0 0 12px var(--rc));
+}
+.rface-hex {
+  width: 18%; aspect-ratio: 1; transform: rotate(45deg);
+  border: 2px solid rgba(122,139,156,.5);
+  box-shadow: inset 0 0 10px rgba(122,139,156,.25);
+}
+.rface-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px;
+  color: var(--rc); text-shadow: 0 0 10px var(--rc);
+}
+
+/* predmet je pod raritou schovany, dokud neprijde odhaleni */
+.tile-item, .flip-item { position: absolute; inset: 0; opacity: 0; }
+
+.is-unveiled .rface { animation: rface-out .55s cubic-bezier(.3,.7,.3,1) var(--ud, 0ms) forwards; pointer-events: none; }
+@keyframes rface-out {
+  0%   { opacity: 1; transform: scale(1);    filter: brightness(1) blur(0); }
+  35%  { opacity: 1; transform: scale(1.06); filter: brightness(2.4) blur(0); }
+  100% { opacity: 0; transform: scale(1.35); filter: brightness(2) blur(8px); }
+}
+/* --ud = rozestup vlny u kaskady, nastavuje JS */
+.is-unveiled .tile-item, .is-unveiled .flip-item { animation: item-in .6s ease-out calc(.12s + var(--ud, 0ms)) both; }
+@keyframes item-in {
+  0%   { opacity: 0; transform: scale(.9);  filter: brightness(2.6); }
+  100% { opacity: 1; transform: none;       filter: none; }
+}
+
+/* ====================================================================== */
+/*  KASKADA                                                               */
+/* ====================================================================== */
+
+.cascade-stage { position: relative; padding: 10px 22px 0; }
+.cascade-grid {
+  position: relative; z-index: 1;
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(118px, 13vw, 210px), 1fr));
+  max-height: 66vh; overflow-y: auto; overflow-x: hidden; padding: 4px;
+}
+
+.flip { perspective: 1000px; aspect-ratio: 16/9; }
+.flip-in {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateY(180deg) scale(.86);
+  transition: transform .6s cubic-bezier(.2,.85,.3,1.25), box-shadow .4s ease;
+}
+.flip.is-open .flip-in { transform: rotateY(0deg) scale(1); }
+.flip-back, .flip-front {
+  position: absolute; inset: 0; backface-visibility: hidden;
+  border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+}
+
+/* rub karty - hextech kosoctverec */
+.flip-back {
+  transform: rotateY(180deg);
+  background:
+    repeating-linear-gradient(60deg, rgba(200,170,110,.05) 0 2px, transparent 2px 10px),
+    linear-gradient(160deg, #12212e, #070c12);
+  display: flex; align-items: center; justify-content: center;
+}
+.flip-hex {
+  width: 34%; aspect-ratio: 1; transform: rotate(45deg);
+  border: 2px solid rgba(200,170,110,.55);
+  box-shadow: inset 0 0 18px rgba(200,170,110,.25);
+}
+
+.flip-front { background: #070c12; }
+.flip-front img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.flip-name {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 16px 7px 5px;
+  background: linear-gradient(180deg, transparent, rgba(4,8,12,.96));
+  font-size: 11px; color: var(--gold-bright); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.flip.rare-EPIC .flip-front,
+.flip.rare-LEGENDARY .flip-front,
+.flip.rare-MYTHIC .flip-front,
+.flip.rare-ULTIMATE .flip-front { border-color: var(--win); }
+
+.flip.is-rare .flip-in { box-shadow: 0 0 34px -4px var(--win); }
+.flip.is-rare.is-open .flip-in { animation: rare-pop .5s .45s cubic-bezier(.2,.9,.3,1.4) both; }
+@keyframes rare-pop {
+  0% { transform: rotateY(0) scale(1); }
+  45% { transform: rotateY(0) scale(1.12); }
+  100% { transform: rotateY(0) scale(1); }
+}
+
+.flip.is-top .flip-in {
+  box-shadow: 0 0 60px -6px var(--win), 0 0 0 2px var(--win) inset;
+  animation: top-pulse 1.4s ease-in-out infinite;
+}
+@keyframes top-pulse {
+  0%, 100% { transform: rotateY(0) scale(1.04); }
+  50%      { transform: rotateY(0) scale(1.1); }
+}
+
+/* ====================================================================== */
+/*  CEDULE                                                                */
+/* ====================================================================== */
+
+.reel-banner { text-align: center; margin: 14px 0 22px; animation: slam .5s cubic-bezier(.15,.9,.25,1.3) both; }
+@keyframes slam {
+  0%   { opacity: 0; transform: scale(1.6); letter-spacing: 18px; filter: blur(6px); }
+  100% { opacity: 1; transform: scale(1);   letter-spacing: normal; filter: none; }
+}
+.reel-rarity {
+  display: block; font-size: 13px; font-weight: 700; letter-spacing: 6px;
+  margin-bottom: 8px; color: var(--win); text-shadow: 0 0 22px var(--win);
+}
+.reel-win-name { font-size: 28px; color: var(--gold-bright); font-weight: 600; }
+.reel-sub { display: block; margin-top: 6px; font-size: 12px; color: var(--text-dim); letter-spacing: 1px; }
+.reel-flourish {
+  display: block; width: 220px; height: 1px; margin: 12px auto 0;
+  background: linear-gradient(90deg, transparent, var(--win), transparent);
+  animation: flourish .7s .25s ease-out both;
+}
+@keyframes flourish { from { width: 0; opacity: 0; } to { width: 220px; opacity: 1; } }
+
+
+/* ====================================================================== */
+/*  OBRAD ODEMKNUTI                                                       */
+/* ====================================================================== */
+
+.unlock-stage {
+  position: relative; height: min(70vh, 560px);
+  display: flex; align-items: center; justify-content: center;
+  /* prstence maji v klidu scale(1.8) a jiskry letí daleko ven - i kdyz jsou
+     pritom neviditelne, roztahovaly by odhaleni a delaly posuvnik */
+  overflow: hidden;
+}
+.unlock-stage.phase-burst { animation: stage-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
+
+.unlock-rings { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 1; }
+.unlock-rings i { position: absolute; border: 1px solid var(--gold); border-radius: 50%; opacity: 0; transform: scale(1.8); }
+.unlock-rings i:nth-child(1) { width: min(46vh, 380px); aspect-ratio: 1; border-style: dashed; }
+.unlock-rings i:nth-child(2) { width: min(62vh, 520px); aspect-ratio: 1; border-color: var(--win); }
+.unlock-rings i:nth-child(3) { width: min(80vh, 680px); aspect-ratio: 1; border-style: dotted; }
+
+.phase-charge .unlock-rings i { animation: ring-in 1.6s cubic-bezier(.4,0,.2,1) both; }
+.phase-charge .unlock-rings i:nth-child(2) { animation-delay: .12s; }
+.phase-charge .unlock-rings i:nth-child(3) { animation-delay: .24s; }
+@keyframes ring-in {
+  0%   { opacity: 0;   transform: scale(1.9) rotate(0deg); }
+  35%  { opacity: .85; }
+  100% { opacity: 0;   transform: scale(.32) rotate(190deg); }
+}
+
+.unlock-motes { position: absolute; top: 50%; left: 50%; pointer-events: none; z-index: 2; }
+.unlock-motes i {
+  position: absolute; width: 6px; height: 6px; margin: -3px;
+  background: var(--gold); transform: rotate(45deg); opacity: 0;
+  box-shadow: 0 0 10px var(--gold);
+}
+.phase-charge .unlock-motes i { animation: mote-in 1.1s ease-in both; }
+@keyframes mote-in {
+  0%   { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(45deg) scale(.4); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(0,0) rotate(220deg) scale(1.4); }
+}
+
+.unlock-card {
+  position: relative; z-index: 3;
+  width: min(64vw, 900px); aspect-ratio: 16/9;
+  border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #060a0e;
+  transform: scale(.34); opacity: .35; filter: grayscale(1) brightness(.5);
+  transition: transform .85s cubic-bezier(.2,.9,.3,1.25), opacity .6s ease, filter .85s ease, box-shadow .85s ease;
+}
+.unlock-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.phase-charge .unlock-card { animation: card-tremble 1.6s ease-in-out both; }
+@keyframes card-tremble {
+  0%   { transform: scale(.34) translate(0,0); }
+  70%  { transform: scale(.3)  translate(2px,-2px); }
+  85%  { transform: scale(.28) translate(-3px,2px); }
+  100% { transform: scale(.26) translate(0,0); }
+}
+.phase-burst .unlock-card { transform: scale(1.1); opacity: 1; filter: grayscale(0) brightness(2); }
+.phase-open  .unlock-card {
+  transform: scale(1); opacity: 1; filter: none;
+  border-color: var(--win); box-shadow: 0 0 90px -10px var(--win), 0 0 0 1px var(--win) inset;
+}
+
+.unlock-sheen {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.5) 50%, transparent 62%);
+}
+.phase-open .unlock-sheen { animation: sheen 1.1s .12s ease-out both; }
+@keyframes sheen {
+  0%   { opacity: 1; transform: translateX(-75%); }
+  100% { opacity: 0; transform: translateX(75%); }
+}
+
+.unlock-frame i { position: absolute; width: 42px; height: 42px; opacity: 0; }
+.unlock-frame i:nth-child(1) { top: 8px;    left: 8px;  border-top: 2px solid var(--gold); border-left: 2px solid var(--gold); }
+.unlock-frame i:nth-child(2) { top: 8px;    right: 8px; border-top: 2px solid var(--gold); border-right: 2px solid var(--gold); }
+.unlock-frame i:nth-child(3) { bottom: 8px; left: 8px;  border-bottom: 2px solid var(--gold); border-left: 2px solid var(--gold); }
+.unlock-frame i:nth-child(4) { bottom: 8px; right: 8px; border-bottom: 2px solid var(--gold); border-right: 2px solid var(--gold); }
+.phase-open .unlock-frame i { animation: corner .5s ease-out both; }
+.phase-open .unlock-frame i:nth-child(2) { animation-delay: .07s; }
+.phase-open .unlock-frame i:nth-child(3) { animation-delay: .14s; }
+.phase-open .unlock-frame i:nth-child(4) { animation-delay: .21s; }
+@keyframes corner {
+  0%   { opacity: 0; transform: scale(2.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.unlock-shock { width: 150px; height: 150px; margin: -75px 0 0 -75px; z-index: 4; }
+.phase-burst .unlock-shock { animation: shock .95s cubic-bezier(.1,.7,.3,1) both; }
+.phase-burst .unlock-flash { animation: flash .7s ease-out both; }
+
+.unlock-label {
+  position: absolute; left: 0; right: 0; bottom: 10px; z-index: 10;
+  text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 8px;
+  color: var(--text-dim);
+}
+.phase-charge .unlock-label { animation: label-pulse 1.6s ease-in-out infinite; }
+@keyframes label-pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+.unlock-label.is-final {
+  color: var(--win); text-shadow: 0 0 26px var(--win);
+  animation: slam .55s cubic-bezier(.15,.9,.25,1.3) both;
+}
+
+@media (max-width: 700px) {
+  .reel-win-name { font-size: 21px; }
+  .reel-fade { width: 22vw; }
+  .unlock-card { width: 88vw; }
+  .unlock-rings i:nth-child(3) { display: none; }
+  .cascade-stage { padding: 10px 12px 0; }
+}
+
+/* ====================================================================== */
+/*  REROLL                                                                */
+/* ====================================================================== */
+
+.rr-stage {
+  --charge: 0;
+  position: relative; height: min(72vh, 600px);
+  /* prstence, paprsky a strepy lezou daleko ven - bez orezu by delaly posuvnik */
+  overflow: hidden;
+}
+.rr-stage.phase-implode,
+.rr-stage.phase-bloom.is-big { animation: stage-shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+
+/* shardy na oltari */
+.rr-card {
+  position: absolute; left: 50%; top: 50%; z-index: 4;
+  width: clamp(170px, 19vw, 290px); aspect-ratio: 16/9;
+  border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  background: #060a0e; opacity: 0;
+  box-shadow: 0 0 34px -8px rgba(200,170,110,.45);
+  will-change: transform, filter, opacity;
+}
+.rr-card.is-placed   { transition: transform .5s cubic-bezier(.2,.9,.3,1.25), opacity .35s ease; }
+.rr-card.is-orbiting { transition: none; }
+.rr-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rr-card-name {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 8px 6px;
+  background: linear-gradient(180deg, transparent, rgba(4,8,12,.95));
+  font-size: 12px; color: var(--gold-bright); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rr-card.rare-EPIC      { border-color: var(--r-epic); }
+.rr-card.rare-LEGENDARY { border-color: var(--r-legendary); }
+.rr-card.rare-MYTHIC    { border-color: var(--r-mythic); }
+.rr-card.rare-ULTIMATE  { border-color: var(--r-ultimate); }
+.rr-card.rare-TRANSCENDENT  { border-color: var(--r-transcendent); }
+.rr-card.rare-EXALTED  { border-color: var(--r-exalted); }
+
+/* runove kruhy */
+.rr-rune {
+  position: absolute; left: 50%; top: 50%; z-index: 1; pointer-events: none;
+  width: min(62vh, 540px); aspect-ratio: 1; border-radius: 50%;
+  border: 1px dashed rgba(200,170,110,.4);
+  transform: translate(-50%, -50%); opacity: 0;
+  transition: opacity .5s ease;
+}
+.rr-rune-2 { width: min(46vh, 400px); border-style: dotted; border-color: rgba(10,200,185,.45); }
+.phase-offer .rr-rune, .phase-vortex .rr-rune { opacity: 1; animation: rune-spin 7s linear infinite; }
+.phase-offer .rr-rune-2, .phase-vortex .rr-rune-2 { animation-direction: reverse; }
+.phase-vortex .rr-rune { animation-duration: .9s; }
+@keyframes rune-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* jadro, ktere roste s virem (--charge 0..1 nastavuje JS) */
+.rr-core {
+  position: absolute; left: 50%; top: 50%; z-index: 3; pointer-events: none;
+  width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(240,230,210,.92) 16%, rgba(200,170,110,.55) 40%, transparent 70%);
+  transform: scale(calc(.2 + var(--charge) * 1.7));
+  opacity: calc(.1 + var(--charge) * .9);
+}
+.phase-portal .rr-core, .phase-bloom .rr-core { opacity: 0; transition: opacity .3s ease; }
+
+/* zablesk a razova vlna */
+.rr-flash {
+  position: absolute; inset: 0; z-index: 9; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, #fff 0%, rgba(240,230,210,.85) 28%, transparent 70%);
+}
+.phase-implode .rr-flash { animation: flash .6s ease-out both; }
+.phase-bloom .rr-flash {
+  background: radial-gradient(circle at 50% 50%, #fff 0%, var(--win) 40%, transparent 72%);
+  animation: flash .55s ease-out both;
+}
+.rr-shock {
+  position: absolute; top: 50%; left: 50%; z-index: 8; pointer-events: none;
+  width: 140px; height: 140px; margin: -70px 0 0 -70px;
+  border: 2px solid var(--gold); border-radius: 50%; opacity: 0;
+}
+.phase-implode .rr-shock { animation: shock .9s cubic-bezier(.1,.7,.3,1) both; }
+.fx-shards.rare-GOLD i { background: var(--gold); }
+
+/* portal, ve kterem se mihaji skiny */
+.rr-portal {
+  --flick: var(--gold);
+  position: absolute; left: 50%; top: 50%; z-index: 5;
+  width: min(60vw, 820px); aspect-ratio: 16/9;
+  border: 2px solid var(--flick); border-radius: 4px; overflow: hidden; background: #04070b;
+  box-shadow: 0 0 60px -10px var(--flick), inset 0 0 60px rgba(0,0,0,.6);
+  transform: translate(-50%, -50%) scale(.15); opacity: 0;
+  transition: transform .45s cubic-bezier(.2,.9,.3,1.35), opacity .25s ease;
+}
+.rr-portal img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.phase-portal .rr-portal { transform: translate(-50%, -50%) scale(.6); opacity: 1; }
+/* behem mihani glitch: odbarveni a rozjete barevne kanaly */
+.phase-portal .rr-portal img {
+  filter: saturate(.55) brightness(.85) contrast(1.15)
+          drop-shadow(4px 0 rgba(255,0,90,.55)) drop-shadow(-4px 0 rgba(0,210,255,.55));
+  animation: portal-jitter .12s steps(2) infinite;
+}
+@keyframes portal-jitter {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(-3px, 1px); }
+  100% { transform: translate(2px, -1px); }
+}
+.rr-portal.is-closing { animation: portal-breathe .5s ease-in-out infinite; }
+@keyframes portal-breathe {
+  0%, 100% { box-shadow: 0 0 60px -10px var(--flick), inset 0 0 60px rgba(0,0,0,.6); }
+  50%      { box-shadow: 0 0 110px 0 var(--flick), inset 0 0 40px rgba(0,0,0,.5); }
+}
+.phase-bloom .rr-portal {
+  transform: translate(-50%, -50%) scale(1); opacity: 1;
+  border-color: var(--win);
+  box-shadow: 0 0 120px -10px var(--win), 0 0 0 1px var(--win) inset;
+  transition: transform .85s cubic-bezier(.2,.9,.3,1.3), box-shadow .85s ease;
+}
+.rr-portal-sheen {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.55) 50%, transparent 62%);
+}
+.phase-bloom .rr-portal-sheen { animation: sheen 1.1s .15s ease-out both; }
+
+/* paprsky v barve rarity za odhalenym skinem */
+.rr-rays {
+  position: absolute; left: 50%; top: 50%; z-index: 0; pointer-events: none;
+  width: 170vmax; height: 170vmax;
+  background: repeating-conic-gradient(from 0deg, var(--win) 0deg 4deg, transparent 4deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 50%);
+          mask-image: radial-gradient(circle, #000 0%, transparent 50%);
+  transform: translate(-50%, -50%); opacity: 0;
+}
+.phase-bloom .rr-rays { animation: rays-in 1.2s ease-out both, rays-spin 16s linear infinite; }
+@keyframes rays-in { from { opacity: 0; } to { opacity: .24; } }
+@keyframes rays-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.rr-label {
+  position: absolute; left: 0; right: 0; bottom: 12px; z-index: 10;
+  text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 9px;
+  color: var(--text-dim);
+}
+.phase-vortex .rr-label, .phase-portal .rr-label { color: var(--gold); animation: label-pulse .8s ease-in-out infinite; }
+.rr-label.is-final {
+  color: var(--win); text-shadow: 0 0 26px var(--win);
+  animation: slam .55s cubic-bezier(.15,.9,.25,1.3) both;
+}
+
+/* --- prepinac rychleho rezimu --- */
+
+.fast-btn.is-on { border-color: var(--teal); color: var(--teal); }
+.sfx-btn.is-muted { opacity: .5; text-decoration: line-through; }
+
+/* --- respekt k systemovemu omezeni pohybu --- */
+/* Casovani uz zkracuje Motion v reel.js; tady jde hlavne o blikani. */
+@media (prefers-reduced-motion: reduce) {
+  .is-unveiled .rface { animation: none; opacity: 0; }
+  .is-unveiled .tile-item, .is-unveiled .flip-item { animation: none; opacity: 1; }
+  .reel-flash, .unlock-flash, .reel-scan { display: none; }
+  .reel-stage.is-hit, .cascade-stage.is-hit, .unlock-stage.phase-burst { animation: none; }
+  .fx-shards { display: none; }
+  .rr-flash, .rr-rays { display: none; }
+  .rr-stage.phase-implode, .rr-stage.phase-bloom.is-big { animation: none; }
+  .phase-portal .rr-portal img { animation: none; filter: saturate(.7); }
+  .flip.is-top .flip-in { animation: none; }
+  .reel-banner, .unlock-label.is-final { animation-duration: .2s; }
+}
