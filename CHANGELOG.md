@@ -41,5 +41,5 @@ First public release.
 - Connection screen that waits for the League client and greets you once connected.
 - Update check: tells you when a newer release is available on GitHub.
 
-[Unreleased]: https://github.com/YOUR-GITHUB-NAME/LootForge/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/YOUR-GITHUB-NAME/LootForge/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Viktoooooor/LootForge/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Viktoooooor/LootForge/releases/tag/v1.0.0
