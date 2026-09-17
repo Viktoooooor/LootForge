@@ -46,7 +46,10 @@ globalThis.TestChest = (function () {
   async function loadChampions() {
     if (champions) return champions;
     const all = await get('/lol-game-data/assets/v1/champion-summary.json');
-    champions = all.filter((c) => c.id > 0);
+    // jen sampioni League (id pod 1000). Seznam obsahuje i "Jade" verze
+    // (Jade_Veigar 60045) z jineho produktu Riotu - jejich skiny maji jina id,
+    // takze by se k nim nenasly hracovy skiny ani cela kresba.
+    champions = all.filter((c) => c.id > 0 && c.id < 1000);
     return champions;
   }
 
@@ -112,10 +115,10 @@ globalThis.TestChest = (function () {
     switch (entry.kind) {
       case 'skin':          return rollSkin(false);
       case 'champion':      return rollChampion();
-      case 'keyFragment':   return currency('Fragment klice', 'HextechKeyFragment_490x490.png', 1);
-      case 'blueEssence':   return currency('Modra esence', 'currency_champion.png', between(150, 1200));
-      case 'orangeEssence': return currency('Oranzova esence', 'currency_cosmetic.png', between(50, 400));
-      case 'mythicEssence': return currency('Mythic esence', 'Mythic_Essence_490px.png', between(5, 25));
+      case 'keyFragment':   return currency('Key Fragment', 'HextechKeyFragment_490x490.png', 1);
+      case 'blueEssence':   return currency('Blue Essence', 'currency_champion.png', between(150, 1200));
+      case 'orangeEssence': return currency('Orange Essence', 'currency_cosmetic.png', between(50, 400));
+      case 'mythicEssence': return currency('Mythic Essence', 'Mythic_Essence_490px.png', between(5, 25));
       default:              return rollChampion();
     }
   }
@@ -202,7 +205,7 @@ globalThis.TestChest = (function () {
       const skin = first.type === 'SKIN_RENTAL';
       const total = (first.disenchantValue || 270) * times;
       added.push({ deltaCount: total, playerLoot: reward(
-        skin ? 'Oranzova esence' : 'Modra esence', 'CURRENCY', 'DEFAULT', '',
+        skin ? 'Orange Essence' : 'Blue Essence', 'CURRENCY', 'DEFAULT', '',
         skin ? 'CURRENCY_cosmetic' : 'CURRENCY_champion') });
 
     } else if (name.includes('upgrade')) {
@@ -234,7 +237,7 @@ globalThis.TestChest = (function () {
   /** Polozka do inventare. `isTest` ji drzi mimo vsechny ostre cesty v app.js. */
   function item() {
     return {
-      lootId: LOOT_ID, lootName: LOOT_ID, itemDesc: 'Testovaci bedna',
+      lootId: LOOT_ID, lootName: LOOT_ID, itemDesc: 'Test chest',
       count: 1, type: 'CHEST', rarity: 'DEFAULT', tilePath: '',
       disenchantValue: 0, upgradeEssenceValue: 0,
       redeemableStatus: 'NOT_REDEEMABLE', itemStatus: 'NONE',
@@ -249,7 +252,7 @@ globalThis.TestChest = (function () {
       try {
         out.push(await rollOne(onlyRare));
       } catch (err) {
-        out.push(currency('Modra esence', 'currency_champion.png', between(150, 1200)));
+        out.push(currency('Blue Essence', 'currency_champion.png', between(150, 1200)));
       }
     }
     return out;
@@ -262,6 +265,7 @@ globalThis.TestChest = (function () {
       storeId: 'TEST_SHOP', catalogEntryId: 'TEST_OFFER',
       name: d.name, kind: 'skin', rarity: d.rarity,
       img: String(d.img || '').replace(/^\/lcu/, ''),
+      splash: String(d.splash || '').replace(/^\/lcu/, ''),
       price: 150, paymentKey: '0-lol_mythic_essence', owned: false,
       isTest: true,
     };

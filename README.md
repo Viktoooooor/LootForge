@@ -1,193 +1,242 @@
-# Hextech Gamba
+# LootForge
 
-Vlastní appka na otevírání beden v League of Legends. Připojí se k **běžícímu
-League klientovi**, ukáže tvůj skutečný loot a umí ho hromadně otevřít, rozložit,
-odemknout nebo rerollnout — s pořádnou reveal animací místo klientského klikání
-kus po kusu.
+Open your League of Legends chests in bulk with cinematic, full-screen reveals.
+Clean up your loot in one click and browse everything you own.
 
-Žádný build, žádné závislosti, žádný Riot API klíč. Jen Node a prohlížeč.
+LootForge runs **on your own PC, next to the League client**. It shows your real
+loot and does the same things as the client's loot screen, only faster and
+nicer to watch. No build step, no dependencies and no Riot API key: just Node.js
+and a browser.
 
-## Spuštění
+> **Unofficial tool.** Everything LootForge does is real and happens on your
+> actual account. See [Safety](#safety) and [Is this allowed?](#is-this-allowed)
+> before you use it.
 
-1. Spusť **League klienta** (stačí přihlášený, nemusíš být ve hře).
-2. Dvojklik na `start.cmd` — nebo v terminálu `node server.js`.
-3. Otevře se `http://127.0.0.1:4545`.
-
-Klient můžeš spustit i až potom, appka se připojí sama. Když je port obsazený
-(typicky už jedna instance běží), server to rovnou napíše.
-
-### Ovládání
+## Features
 
 | | |
 |---|---|
-| `Esc` / `mezerník` | během animace ji přeskočí, po dojetí zavře odhalení |
-| kolečko myši | pod otevřeným odhalením se pozadí neposouvá |
-| klik na tmavé pozadí | zavře odhalení nebo detail |
-| `Enter` / `Esc` | potvrdí / zruší potvrzovací okno |
-| `Esc` v režimu rerollu | vypne režim rerollu |
-| tlačítko **Rychle** | zkrácené animace pro hromadné otevírání |
-| tlačítko **Zvuk** | umlčí zvuk |
+| **Chests** | Open one, all of a kind, or everything at once. *Open all* shows its progress and can be stopped after the current batch. Keeps track of your keys and forges keys from fragments. |
+| **Cinematic reveals** | You see the rarity first (official gem and colour), then the item. One chest gets a big roulette, 2–5 get stacked reels, 6+ get a card cascade. A summary of everything you got comes at the end. |
+| **Unlock & reroll** | Unlocking plays a ceremony instead of a spin, because you already know what you get. Reroll puts three shards on an altar, spins them into a vortex and pulls a new skin out of a portal. |
+| **Skin & champion shards** | Shards and permanents are grouped separately. Shards you already own get an *OWNED* ribbon. You can search, filter by rarity or ownership, and sort by essence value, count or name. |
+| **Starred shards** | Star a shard to protect it: clean up, *Select all* and *Suggest 3* never take it, starred shards are listed first, and disenchanting one by hand warns you. |
+| **Clean up** | Disenchant in bulk by rules: shards and permanents of champions you own, extra copies (one copy is always kept), duplicate wards, emotes and icons. Skin shards are off by default because rerolling them is usually better. Click an item to keep it. |
+| **Skin details** | Full, uncropped splash art, chromas (owned ones are ticked, click one to see the model), your other skins for that champion and a video preview by SkinSpotlights. |
+| **Mythic Shop** | Current rotations with images, rarity gems and countdowns. You can buy with Mythic Essence. |
+| **Collection** | Everything you own: skins, champions, chromas, emotes, icons, wards and Nexus Finishers, with your completion percentage. |
+| **Stats** | Chests opened, skin shards per chest, rarity distribution, essence gained and spent, rerolls, unlocks and a history. You can export them to JSON. |
+| **Connection screen** | Waits for the League client with an animated emblem, tells you what to do if the client isn't running, and greets you by your Riot ID once it connects. It comes back if the client closes. |
+| **Live updates** | Open a chest in the client and LootForge refreshes by itself. After a game it tells you what you got (*New loot: +1 Hextech Chest…*), and essence changes flash in the wallet. |
+| **Remembers your view** | The last tab, filters, sorting and collection view survive a page reload (search text doesn't). |
+| **Test items** | Optional simulated chest, shards and shop offer for trying out the animations. They never touch your account. Turn them on in *Settings*. |
 
-Appka respektuje systémové nastavení **omezení pohybu** — když ho máš zapnuté,
-naběhne rovnou v rychlém režimu a vypnou se zážehy a otřesy.
+Every irreversible action (disenchant, clean up, unlock, reroll, buy) goes
+through a confirmation that tells you exactly what you will lose. The only
+exception is opening chests, because that is the whole point of the app.
 
-## Co to umí
+## Requirements
+
+- **Windows** with the **League of Legends client** installed.
+- Nothing else for `LootForge.exe`. Running from source needs
+  [Node.js](https://nodejs.org/) 18 or newer.
+
+## Getting started
+
+1. Download `LootForge-<version>-windows-x64.zip` from the latest release and
+   extract it anywhere.
+2. Start the League client and log in. You don't need to be in a game.
+3. Double-click **`LootForge.exe`**. Your browser opens LootForge at
+   `http://127.0.0.1:4545`.
+
+There is no console window. LootForge shows a connection screen until the
+League client is ready (you can start the client later), and **quits by itself
+about 30 seconds after you close its browser tab**. Double-clicking the exe again
+while it runs just opens the tab. If something goes wrong, the log is in
+`%LOCALAPPDATA%\LootForge\lootforge.log`.
+
+> **"Windows protected your PC"?** The exe isn't code-signed (signing costs money
+> every year), so SmartScreen warns about it on the first start. Click
+> *More info → Run anyway*. If you'd rather not, run LootForge from source instead.
+
+### Running from source
+
+Clone the repository and double-click **`start.cmd`**, or run `npm start` /
+`node server.js`. To use a different port: `set PORT=4546 && node server.js`.
+
+### Updates
+
+LootForge checks GitHub for a newer release at most twice a day and shows a
+*vX.Y.Z available* button in the top bar. It never downloads or installs anything
+by itself. You can turn the check off in *Settings*. See [CHANGELOG.md](CHANGELOG.md)
+for what changed in each version.
+
+### Controls
 
 | | |
 |---|---|
-| **Bedny** | Otevře jednu, všechny stejného druhu, nebo úplně všechno jedním klikem. Hlídá, kolik máš klíčů. Z fragmentů umí ukovat klíče. |
-| **Skin shardy** | Rozložit na oranžovou esenci, odemknout napermanent. Filtr „jen ty, co už vlastním". |
-| **Reroll** | Tlačítko *Reroll* v tabu skinů otevře zásobník se třemi sloty. Naklikáš tři shardy (nebo *Navrhnout 3* vybere nejlevnější, duplikáty mají přednost) a dostaneš za ně jeden náhodný skin natrvalo. |
-| **Champion shardy** | Oddělené skupiny *Shardy* a *Permanenty*, ať je jasné, co ještě jde odemknout a co už máš. |
-| **Testovací bedna** | Simulace pro ladění reveal animace. Losuje ze skutečných dat klienta (reálné skiny, artwork, rarity), ale **nic neposílá** — žádný craft, žádná esence, žádný zápis do statistik. |
-| **Celoobrazovkové odhalení** | Napřed uvidíš jen raritu (oficiální drahokam a barva jako v LoLku), teprve pak, co to je. Když padne víc věcí, na konci dostaneš souhrn všeho. |
-| **Označení vlastněných** | Shardy věcí, které už máš, mají zelenou pásku *VLASTNIS* a ztlumený obrázek — duplikáty na rozložení nebo reroll poznáš na první pohled. |
-| **Obřad odemknutí** | Odemykání shardu nic netočí — víš přece, co dostaneš. Místo toho se kolem karty stáhnou hextech prstence, slétnou se jiskry, jádro praskne a zůstane po něm permanent ve zlatém rámu. |
-| **Živé aktualizace** | Otevřeš bednu přímo v klientovi a appka se přepíše sama — nemusíš mačkat *Obnovit*. |
-| **Detail skinu** | Klikni na skin shard a otevře se celý splash art. Tlačítkem *Video prohlídka* si pustíš detailní prohlídku skinu od SkinSpotlights (YouTube) přímo v appce. Pod tím jsou všechny skiny, které na toho šampiona už máš — kliknutím uvidíš jejich splash. Rozložit nebo odemknout jde rovnou z detailu. Hromadný výběr je na kolečku v rohu karty. |
-| **Skiny na šampiona** | U skin shardů i na kartách („3 skiny na šampiona“), před odemknutím a když ti skin padne. |
-| **Mythic shop** | Aktuální rotace (featured, dvoutýdenní, týdenní, denní) s obrázky, drahokamem rarity a odpočtem do konce. Nákup za mythic esenci s potvrzením; appka počká, jestli nákup opravdu prošel. |
-| **Session** | Kolik beden padlo, co z nich vypadlo, nejlepší drop. Historie žije v `localStorage`, na účet nemá vliv. |
+| `Esc` / `Space` | skip the running animation, then close the reveal |
+| click the dark background | close the reveal, skin details or clean up |
+| `Enter` / `Esc` | confirm / cancel a confirmation |
+| **Fast** button | shorter animations for bulk opening |
+| **Sound** button | mute the synthesized sound effects |
 
-Nevratné akce (rozložit, odemknout, reroll) vždycky projdou potvrzovacím oknem
-s vyčíslením, o co přijdeš. Otevření bedny se nepotvrzuje — to je smysl appky.
+LootForge respects your system's *reduce motion* setting and starts in fast mode
+when it is on.
 
-### Animace
+## Video previews (optional YouTube key)
 
-Odhalení běží přes **celou obrazovku** a režim se vybírá podle toho, kolik toho
-padlo — protože otevřít jednu bednu a otevřít deset jsou dvě různé situace:
+The *Video preview* button in skin details finds the skin's SkinSpotlights video.
 
-| Padlo | Co uvidíš |
-|---|---|
-| **1 věc** | Jedna velká ruleta přes celou šířku. Pás je poskládaný z karet rarit — dojede na raritu, chvíli počká a pak se karta rozprskne a ukáže, co to je. |
-| **2–5 věcí** | Tolik pásů nad sebou. Rozjedou se naráz, ale **každý dojede o kousek později** — takže napětí neskončí prvním dojezdem. |
-| **6+ věcí** | Kaskáda: karty se otočí na raritu, pak se běžné odkryjí jednou vlnou a vzácné každá zvlášť, nejlepší nakonec. |
-| **2+ věcí** | Po animaci souhrn *Co ti padlo*: sloučené, sečtené podle druhu a seřazené od nejvzácnější. |
-| **odemknutí** | Obřad, nic se netočí — výsledek je předem jasný. |
-| **reroll** | Tři shardy se položí na oltář, roztočí se ve víru, zhroutí do jádra a z glitchujícího portálu vypadne nový skin. |
+- **Without a key**, it opens a YouTube search for the skin in a new tab.
+- **With your own YouTube Data API key**, the video plays right inside LootForge.
 
-Odhalení se neotevírá jako obyčejný popup: nejdřív se přes obrazovku rozjede
-zlatá linka, ta se rozevře na dvě desky a mezi nimi vyplave obsah. Zavírá se
-stejnou cestou zpátky. Během té vteřiny stejně běží craft, takže se pod animací
-schová čekání na klienta.
+To get a key:
 
-Rozmazání pásu se počítá z okamžité rychlosti, poslední vteřinu se rám obarví
-do rarity toho, co se blíží, a dopad znamená náraz obrazu, zážeh, rázovou vlnu
-a střepy. Ostatní dlaždice zšednou, aby zůstala jen výhra.
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+2. Enable **YouTube Data API v3** for the project.
+3. Go to *Credentials → Create credentials → API key*. Restricting the key to
+   *YouTube Data API v3* is a good idea.
+4. Paste the key into **Settings → Skin video previews**.
 
-**Obřad odemknutí** má karta scvrklou a rozklepanou, kolem ní se stahují hextech
-prstence, slétnou se jiskry, jádro praskne a permanent se rozvine do plné
-velikosti se světelným přejezdem a zlatými rohy.
+The free quota is 10,000 units a day. One search costs 100 units, so you get
+about 100 searches a day. Found videos are cached for 30 days, so the same skin
+doesn't cost quota twice.
 
-**Reroll** je nejdelší ze všech (~7,5 s), protože tady se opravdu losuje: tři
-vybrané shardy vyletí zespodu a zapadnou do trojúhelníku, pak kolem jádra krouží
-čím dál rychleji, rozmazávají se a stahují, až se se zábleskem zhroutí. Z jádra
-se otevře portál, ve kterém se míhají skiny — rozbité barevné kanály, cukání,
-rámeček bliká barvami rarit — a postupně zpomaluje. Barva rarity výsledku se
-schválně nikde neobjeví dřív než v rozkvětu, kdy se portál rozvine do plné
-velikosti a za ním se roztočí paprsky.
+LootForge never scrapes YouTube pages. Videos are embedded with the official
+YouTube player (`youtube-nocookie.com`), so views count for the creator.
 
-Hromadné rozkládání a kování klíčů animaci nemá — tam není co dramatizovat,
-karty se jen vysypou. *Přeskočit animaci* utne cokoliv okamžitě, *Zvuk* umlčí
-zvuk (volba se pamatuje).
+## Safety
 
-Zvuk je celý syntetizovaný WebAudiem, žádné mp3: tikání je filtrovaný šum, který
-se s klesající rychlostí prohlubuje a těžkne, pod jízdou duní bas řízený
-rychlostí pásu, a dopad je akord podle rarity — čím vzácnější, tím víc tónů,
-delší dozvuk a navrch třpytky. U více pásů dostane plnou ránu ten poslední,
-ostatní jen cvaknou.
+- **Everything is real.** LootForge sends the League client the same requests its
+  own loot screen sends (`POST /lol-loot/v1/recipes/{recipe}/craft`). Loot you
+  open, disenchant or reroll is gone for good.
+- **No cheats.** No injection, no memory reading, no changes to game files.
+  LootForge is just a different front end for the client's local API.
+- **It stays on your PC.** The server only listens on `127.0.0.1`, and the client's
+  auth token never leaves your computer.
+- **Other websites can't use it.** The server only accepts write requests from
+  LootForge's own page (it checks `Host`, `Origin` and the content type). A random
+  site open in your browser cannot disenchant your loot through it.
+- **Mythic Shop purchases are experimental.** LootForge waits for the client to
+  confirm the purchase and never reports success blindly. Still, double-check new
+  purchases in the client.
 
-### Testovací bedna
+## Is this allowed?
 
-V tabu Bedny je vždycky dole karta s fialovým čárkovaným rámečkem a odznakem
-`SIMULACE`. Otevře 1 / 5 / 10 kusů nebo rovnou „Jackpot" (vynutí vzácný skin, ať
-si vyzkoušíš glow u epic/legendary/mythic). Odměny se losují v prohlížeči
-z `champion-summary.json` a per-champion dat, takže reveal vypadá přesně jako
-ostrý — jen se nikde nic nestalo. Do „Otevřít vše" se nepočítá.
+LootForge uses the **League Client API (LCU)**, the local API the client uses for
+its own screens. Riot states that this API is *not officially supported* for
+third-party apps and gives no guarantees that it stays stable. Many well-known
+companion apps rely on it, but **you use LootForge at your own risk**. If Riot
+changes the API, parts of the app can stop working until they are updated.
 
-Kromě bedny přibydou v tabech Skiny a Šampioni i **testovací shardy** (3 skin +
-1 champion, taky s odznakem `SIMULACE`). Jdou rozložit, odemknout i rerollnout
-a projdou přitom úplně stejným kódem jako ostré položky — potvrzovací okno,
-výběr, actionbar, ruleta. Odbočí se až v `craft()`, kde se místo requestu na
-klienta vrátí simulovaná odpověď. Míchat testovací a ostré položky v jedné akci
-appka odmítne.
+LootForge is free and will stay free. It contains no gambling features: it only
+opens loot you already own, exactly as the client does.
 
-Chceš jiné pomery dropů? Přepiš `DROP_TABLE` v `public/simulator.js`.
+## Privacy
 
-## Jak to funguje
+LootForge has no accounts, no analytics and no telemetry.
 
-```
-prohlížeč  ──/lcu/*──>  server.js  ──https + Basic auth──>  LeagueClientUx (LCU)
-                            │
-                            └── najde port a token z běžícího procesu klienta
-```
+- Your loot, stats, history and settings stay on your computer (in the browser's
+  `localStorage` and in memory of the local server).
+- Game images are loaded from your own League client. Nothing from Riot is
+  redistributed with LootForge.
+- The update check asks the public GitHub API for the latest LootForge release
+  (at most twice a day, can be turned off in *Settings*). Only the request itself
+  is sent: no data about you or your account.
+- Other requests to the internet go to YouTube/Google, and only when you use
+  video previews. With an API key, the skin name and your key are sent to the
+  YouTube Data API. Google's
+  [Privacy Policy](https://policies.google.com/privacy) and the
+  [YouTube Terms of Service](https://www.youtube.com/t/terms) apply to those
+  requests.
 
-Prohlížeč se k LCU nedostane sám: běží na náhodném portu, má self-signed
-certifikát a chce Basic auth s tokenem, který zná jen klient. `server.js` proto
-credentials najde (příkazová řádka procesu `LeagueClientUx.exe`, fallback
-`lockfile`), drží si je a proxuje `/lcu/*` dál. Obrázky skinů jdou stejnou
-cestou (včetně originálních ikon esencí a klíčů), takže appka funguje i bez
-internetu.
+## Known limitations
 
-**Loot se hlídá sám.** Prohlížeč drží otevřený SSE kanál na `/api/events` a
-server mu hlásí, když se inventář v klientovi změnil (porovnává otisk každé dvě
-vteřiny). Otevřeš bednu v klientovi a appka se překreslí. *Obnovit* zůstalo pro
-jistotu, ale běžně ho nepotřebuješ.
+- Windows only for now. The client discovery reads the `LeagueClientUx.exe`
+  process and the Windows lockfile.
+- Item names come from the client, so they follow your client's language.
+- Drop weights of the simulated test chest are an estimate, not official Riot numbers.
 
-**Obrázky se cachují.** LCU u nich posílá `no-cache`, takže by je prohlížeč
-revalidoval při každém roztočení rulety — a ta staví 58 dlaždic na pás. Proxy
-u `/lol-game-data/assets/*` hlavičku přepíše; ty soubory se mezi patchi nemění.
-
-**Recepty si nevymýšlíme.** Co s čím jde udělat, se tahá z
-`/lol-loot/v1/recipes/initial-item/{lootId}` — z odpovědi plyne typ akce
-(`OPEN`, `FORGE`, `DISENCHANT`, `UPGRADE`, `REROLL`) i sloty se surovinami.
-Díky tomu appka zvládne i bedny a kapsle, které Riot přidá až později, aniž by
-se do ní muselo sahat.
-
-Dvě pasti, na které se naráží. **Endpoint vrací všechny recepty, kde se položka
-kdekoliv objeví** — u klíče tedy všechny bedny světa. Proto `recipeAppliesTo()`
-nechá jen ty, kde je položka hlavní surovinou; bez toho se klíče tváří jako bedny.
-A **klient nechá `slot.lootIds` prázdné**, když do
-slotu nic z inventáře nesedí (typicky slot na samotnou bednu). V tom případě do
-něj patří právě ta položka, na kterou hráč kliknul — řeší to `slotIds()`
-v `public/app.js`.
-
-## Testy
+## How it works
 
 ```
-node tests/run.js
+browser  ──/lcu/*──>  server.js  ──https + Basic auth──>  League client (LCU)
+                          │
+                          └── finds the port and token of the running client
 ```
 
-Bez závislostí, jeden příkaz. Testy nikdy nic neposílají na účet — všechny
-zápisy jsou v nich zablokované. Ty, které potřebují přihlášeného klienta, se
-bez něj přeskočí.
+The browser can't talk to the client directly: the client runs on a random port
+with a self-signed certificate and a token only it knows. `server.js` finds those
+credentials (the command line of `LeagueClientUx.exe`, with the lockfile as a
+fallback) and proxies `/lcu/*`.
 
-## Struktura
+Recipes are never hard-coded. What can be done with an item comes from
+`/lol-loot/v1/recipes/initial-item/{lootId}`, so new chest types work without
+changes to the app.
+
+## Development
 
 ```
-server.js        discovery credentials + proxy na LCU + statické soubory (0 závislostí)
-start.cmd        dvojklik launcher
+node tests/run.js              all tests
+node tests/run.js skiny css    only some (by file name)
+```
+
+The tests need no dependencies. They load the real front-end code in Node with a
+small DOM stand-in, and **every write request is blocked**, so no test can ever
+change your account. Tests that need a running client are skipped without one.
+To point them at another server, use `LOOTFORGE_URL=http://127.0.0.1:4546`.
+
+### Building the exe
+
+```
+npm run build
+```
+
+This creates `dist/LootForge.exe` and `dist/LootForge-<version>-windows-x64.zip`
+(exe, README, LICENSE, CHANGELOG) for a GitHub release. It uses Node's built-in
+[single executable applications](https://nodejs.org/api/single-executable-applications.html)
+(Node.js 20.12 or newer) and downloads the official `postject` tool through `npx`
+during the build. LootForge itself still has no dependencies.
+
+Releasing a new version: bump `version` in `package.json` and in the footer of
+`public/index.html`, add a `CHANGELOG.md` entry, run the tests, run
+`npm run build`, and attach the ZIP to a GitHub release tagged `vX.Y.Z`.
+
+```
+server.js        client discovery, LCU proxy, request guard, collection and shop summaries
+start.cmd        Windows launcher (from source)
+scripts/
+  build-exe.js   builds LootForge.exe and the release ZIP
 public/
-  index.html     kostra UI
-  app.css        hextech vzhled, rarity barvy, animace
-  app.js         načítání lootu, recepty, crafting, reveal, session log
-  simulator.js   testovací bedna a shardy (simulace, nesahá na účet)
-  reel.js        hextech ruleta, obřad odemknutí a syntetizovaný zvuk
-  reel.css       vzhled animací
-tests/
-  run.js         spustí všechny testy
-  harness.js     napodobenina prohlížeče, zablokovaný zápis
-  *.test.js      jednotlivé oblasti
+  index.html     UI skeleton
+  app.js         loot, recipes, crafting, reveals, filters, clean up, collection, stats, settings
+  reel.js        roulette, cascade, unlock and reroll animations, synthesized sound
+  simulator.js   optional test items (simulation only)
+  app.css        styles
+  reel.css       animation styles
+tests/           test runner, harness and test files
 ```
 
-## Poznámky
+Internal developer notes (in Czech) are in [`CLAUDE.md`](CLAUDE.md).
 
-- Appka posílá klientovi přesně ty samé craft requesty jako jeho vlastní UI
-  (`POST /lol-loot/v1/recipes/{recipe}/craft?repeat=N`). Nic neinjektuje, nečte
-  paměť, nesahá na soubory hry — je to jen jiný front-end nad LCU.
-- Mezi hromadnými crafty je krátká pauza, ať klient stíhá. Nezvyšuj ji na nulu.
-- Všechno běží na `127.0.0.1`. Server neposlouchá navenek a token nikam neodchází.
-- Server přijme zápis **jen od vlastní stránky**. Jiná webová stránka otevřená
-  v prohlížeči se k proxy nedostane — kontroluje se `Host`, `Origin` a typ obsahu.
-- Neoficiální API. Riot ho může kdykoliv změnit; když se něco rozbije, podívej
-  se, co reálně vrací `/lol-loot/v1/player-loot` a `.../recipes/initial-item/…`.
+## Credits
+
+- Skin video previews are made by [SkinSpotlights](https://www.youtube.com/channel/UC0NwzCHb8Fg89eTB5eYX17Q).
+  All rights to the videos belong to their creators.
+- Game art, names and icons belong to Riot Games and are loaded from your own
+  League client.
+
+## Legal
+
+LootForge was created under Riot Games' "Legal Jibber Jabber" policy using assets
+owned by Riot Games. Riot Games does not endorse or sponsor this project.
+
+LootForge isn't endorsed by Riot Games and doesn't reflect the views or opinions
+of Riot Games or anyone officially involved in producing or managing Riot Games
+properties. Riot Games, and all associated properties are trademarks or
+registered trademarks of Riot Games, Inc.
+
+## License
+
+[MIT](LICENSE)

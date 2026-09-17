@@ -1,4 +1,4 @@
-/* Hextech animace odmen - pres celou obrazovku.
+/* LootForge - animace odmen pres celou obrazovku.
  *
  * Podle toho, kolik toho padne, se pouzije jiny rezim:
  *   play()     1 vec     - jedna velka ruleta pres celou sirku
@@ -16,6 +16,18 @@
 
 'use strict';
 
+// Appka se driv jmenovala "Hextech Gamba" a ukladala pod "gamba.*". Nastaveni
+// a statistiky se jednou prenesou, at o ne nikdo neprijde. reel.js se nacita
+// jako prvni, takze to probehne driv, nez cokoliv z localStorage cte.
+(function migrateStorage() {
+  try {
+    for (const k of ['mute', 'fast', 'history', 'stats', 'cleanup']) {
+      const old = localStorage.getItem('gamba.' + k);
+      if (old !== null && localStorage.getItem('lootforge.' + k) === null) localStorage.setItem('lootforge.' + k, old);
+    }
+  } catch (_) { /* bez localStorage neni co prenaset */ }
+})();
+
 globalThis.Reel = (function () {
 
   const TILES = 58;
@@ -27,7 +39,7 @@ globalThis.Reel = (function () {
   const MAX_ROWS = 5;
 
   const RARITY_LABEL = {
-    DEFAULT: 'ZISK', EPIC: 'EPIC', LEGENDARY: 'LEGENDARY',
+    DEFAULT: 'REWARD', EPIC: 'EPIC', LEGENDARY: 'LEGENDARY',
     MYTHIC: 'MYTHIC', ULTIMATE: 'ULTIMATE', TRANSCENDENT: 'TRANSCENDENT', EXALTED: 'EXALTED',
   };
   const RARITY_RANK = ['DEFAULT', 'EPIC', 'LEGENDARY', 'MYTHIC', 'ULTIMATE', 'TRANSCENDENT', 'EXALTED'];
@@ -44,10 +56,10 @@ globalThis.Reel = (function () {
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     },
     get fast() {
-      const v = localStorage.getItem('gamba.fast');
+      const v = localStorage.getItem('lootforge.fast');
       return v === null ? this.reduced : v === '1';
     },
-    set fast(v) { localStorage.setItem('gamba.fast', v ? '1' : '0'); },
+    set fast(v) { localStorage.setItem('lootforge.fast', v ? '1' : '0'); },
     /** Zkrati casovani, kdyz je zapnuty rychly rezim. */
     t(ms) { return this.fast ? Math.max(60, Math.round(ms * 0.26)) : ms; },
   };
@@ -86,8 +98,8 @@ globalThis.Reel = (function () {
   const Sfx = {
     ctx: null, master: null, _noise: null,
 
-    get enabled() { return localStorage.getItem('gamba.mute') !== '1'; },
-    set enabled(v) { localStorage.setItem('gamba.mute', v ? '0' : '1'); },
+    get enabled() { return localStorage.getItem('lootforge.mute') !== '1'; },
+    set enabled(v) { localStorage.setItem('lootforge.mute', v ? '0' : '1'); },
 
     /** AudioContext smi vzniknout az po kliknuti - sem se vzdy dostaneme z nej. */
     wake() {
@@ -363,7 +375,7 @@ globalThis.Reel = (function () {
   }
 
   /**
-   * Poskladá pas: nahodna vypln, na WIN_AT pozici vyhra.
+   * Posklada pas: nahodna vypln, na WIN_AT pozici vyhra.
    * Vypln se losuje, ne bere po poradku - jinak by kazdy pas vypadal stejne
    * a pri peti bednach naraz to bylo videt na prvni pohled.
    */
@@ -621,7 +633,7 @@ globalThis.Reel = (function () {
 
       // --- 2) odhaleni: bezne vsechny jednou vlnou, vzacne pak kazda zvlast ---
       // Rozestup vlny resi CSS (--ud), ne cekani v JS - jinak kazda karta narazi
-      // na minimum v Motion.t() a u dvaceti obycejnych veci se to vleče.
+      // na minimum v Motion.t() a u dvaceti obycejnych veci se to vlece.
       const commons = cards.filter((c) => rank(c.drop.rarity) === 0);
       const rares = cards.filter((c) => rank(c.drop.rarity) >= 1)
         .sort((a, b) => rank(a.drop.rarity) - rank(b.drop.rarity));   // nejlepsi posledni
@@ -663,22 +675,57 @@ globalThis.Reel = (function () {
    * Zadna ruleta - tady uz vis, co dostanes. Shard se sbali do hextech jadra,
    * to praskne a zustane po nem permanent v ramu.
    */
+  /*
+   * Velke obrazky (karta pri odemknuti, portal pri rerollu) maji 900 px na sirku.
+   * `img` v dropu je ctvercovy vyrez 380x380, ktery se tam jen rozmaze a orizne.
+   * Cela kresba je "uncentered" splash (1215x717, skoro presne 16:9); v lootu
+   * je jen "centered", odvozeni sedi u vsech skinu i zakladnich sampionu.
+   */
+  function fullArtUrl(drop) {
+    const s = String((drop && drop.splash) || '');
+    return s ? s.replace(/_splash_centered_/i, '_splash_uncentered_') : '';
+  }
+
+  /** Zacne nacitat celou kresbu hned, at je pri zvetseni pripravena. */
+  function preloadArt(drop) {
+    const art = { url: fullArtUrl(drop), ready: false, failed: false, target: null };
+    if (!art.url || typeof Image !== 'function') return art;
+    const pre = new Image();
+    pre.onload = () => {
+      art.ready = true;
+      if (art.target) art.target.src = art.url;   // dorazila az po zvetseni - vymenit hned
+    };
+    pre.onerror = () => { art.failed = true; };   // zustane vyrez, lepsi nez nic
+    pre.src = art.url;
+    return art;
+  }
+
+  /** Nasadi celou kresbu, jakmile je (nebo az bude) nactena. */
+  function showArt(img, art) {
+    if (!img || !art.url || art.failed) return;
+    if (art.ready) img.src = art.url;
+    else art.target = img;
+  }
+
   function unlock(drop, host) {
     skipRequested = false;
     const rarity = drop.rarity || 'DEFAULT';
+    const art = preloadArt(drop);
+    // ikony, emoty a chromy nejsou 16:9 kresby - roztazene by byly rozmazane
+    const iconLike = drop.icon && !art.url;
 
     const stage = makeEl('unlock-stage', `
       <div class="cine-glow"></div>
       <div class="unlock-rings"><i></i><i></i><i></i></div>
       <div class="unlock-motes"></div>
-      <div class="unlock-card">
+      <div class="unlock-card${iconLike ? ' is-icon' : ''}">
         ${drop.img ? `<img src="${esc(drop.img)}" alt="" onerror="this.style.display='none'">` : ''}
         <div class="unlock-sheen"></div>
         <div class="unlock-frame"><i></i><i></i><i></i><i></i></div>
       </div>
       <div class="unlock-shock"></div>
       <div class="unlock-flash"></div>
-      <div class="unlock-label">ODEMYKANI</div>`);
+      <div class="unlock-label">UNLOCKING</div>`);
     stage.style.setProperty('--win', rarityVar(rarity));
 
     host.innerHTML = '';
@@ -704,13 +751,15 @@ globalThis.Reel = (function () {
 
       stage.classList.remove('phase-charge');
       stage.classList.add('phase-burst');
+      // karta se ted roztahne na celou sirku - vymena za celou kresbu schova zablesk
+      showArt(stage.querySelector('.unlock-card img'), art);
       Sfx.unlockBurst(rarity);
       shards(stage, rarity, 36, 300);
       await wait(skipRequested ? 0 : Motion.t(260));
 
       stage.classList.remove('phase-burst');
       stage.classList.add('phase-open');
-      label.textContent = 'ODEMCENO NATRVALO';
+      label.textContent = 'UNLOCKED';
       label.classList.add('is-final');
       await wait(skipRequested ? 60 : Motion.t(1100));
     })();
@@ -772,6 +821,7 @@ globalThis.Reel = (function () {
       frames.push(src[idx]);
     }
     frames.push(result);
+    const art = preloadArt(result);   // do rozkvetu je casu dost
     // nacist predem, jinak by rychle mihani ukazovalo prazdna okna
     if (typeof Image === 'function') {
       frames.forEach((f) => { if (f.img) { const im = new Image(); im.src = f.img; } });
@@ -854,8 +904,9 @@ globalThis.Reel = (function () {
       stage.style.setProperty('--win', rarityVar(rarity));
       stage.classList.remove('phase-portal');
       stage.classList.add('phase-bloom');
+      showArt(portalImg, art);   // portal se roztahne - cela kresba misto ctvercoveho vyrezu
       if (rank(rarity) >= 2) stage.classList.add('is-big');
-      label.textContent = 'NOVY SKIN';
+      label.textContent = 'NEW SKIN';
       label.classList.add('is-final');
       Sfx.land(rarity, 1);
       shards(stage, rarity, rank(rarity) >= 2 ? 46 : 30, 340);
@@ -869,12 +920,12 @@ globalThis.Reel = (function () {
   function bannerHtml(drop, extra) {
     const rarity = drop.rarity || 'DEFAULT';
     return `<div class="reel-banner rare-${rarity}" style="--win:${rarityVar(rarity)}">
-      <span class="reel-rarity">${RARITY_LABEL[rarity] || 'ZISK'}</span>
+      <span class="reel-rarity">${RARITY_LABEL[rarity] || 'REWARD'}</span>
       <span class="reel-win-name">${esc(drop.name)}${drop.count > 1 ? ` &times;${drop.count}` : ''}</span>
       ${extra ? `<span class="reel-sub">${esc(extra)}</span>` : ''}
       <span class="reel-flourish"></span>
     </div>`;
   }
 
-  return { play, playMulti, cascade, unlock, reroll, skip, bannerHtml, rarityFaceHtml, GEM, rank, Sfx, Motion, MAX_ROWS };
+  return { play, playMulti, cascade, unlock, reroll, skip, bannerHtml, rarityFaceHtml, GEM, rank, Sfx, Motion, MAX_ROWS, fullArtUrl };
 })();

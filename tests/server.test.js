@@ -17,7 +17,7 @@ const t = suite('server');
 const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const url = new URL(BASE);
 const OUR_ORIGIN = `http://${url.hostname}:${url.port}`;
-const HARMLESS = '/lcu/lol-loot/v1/gamba-test-neexistuje';
+const HARMLESS = '/lcu/lol-loot/v1/lootforge-test-neexistuje';
 
 /** Syrovy request - fetch nedovoli podvrhnout hlavicku Host. */
 function raw(method, pathname, headers = {}, body) {
@@ -52,30 +52,9 @@ function raw(method, pathname, headers = {}, body) {
     t.ok(fingerprint(a) === fingerprint(a.concat([{ lootId: '', count: 25 }])), 'prazdna polozka bez lootId se ignoruje');
   }
 
-  t.section('vyber videa SkinSpotlights (offline)');
-  const pickSrc = src.match(/function normalizeTitle\(text\) \{[\s\S]*?\n\}/);
-  const pickFn = src.match(/function pickSpotlight\(videos, skinName\) \{[\s\S]*?\n\}/);
-  const channel = (src.match(/const SPOTLIGHT_CHANNEL = '([^']+)'/) || [])[1];
-  t.ok(pickSrc && pickFn && channel, `vyber je cista funkce, kanal ${channel}`);
-  if (pickSrc && pickFn) {
-    const pickSpotlight = eval(`(function(){ const SPOTLIGHT_CHANNEL='${channel}'; ${pickSrc[0]}; ${pickFn[0]}; return pickSpotlight; })()`);
-    const v = (id, title, ch) => ({ id, title, channelId: ch || channel });
-    const list = [
-      v('pbe', 'Dawnbringer Janna Skin Spotlight - Pre-Release - PBE Preview - League of Legends'),
-      v('cmp', 'Dawnbringer Janna VS Bewitching Janna', 'UCjiny'),
-      v('cizi', 'Dawnbringer Janna Skin Spotlight', 'UCkopie'),
-      v('final', 'Dawnbringer Janna Skin Spotlight - League of Legends'),
-    ];
-    t.ok((pickSpotlight(list, 'Dawnbringer Janna') || {}).id === 'final', 'hotovy skin ma prednost pred PBE nahledem');
-    t.ok((pickSpotlight(list.slice(0, 3), 'Dawnbringer Janna') || {}).id === 'pbe', 'kdyz hotove video neni, vezme PBE');
-    t.ok(pickSpotlight([v('x', 'Dawnbringer Janna Skin Spotlight', 'UCkopie')], 'Dawnbringer Janna') === null, 'jiny kanal se stejnym nazvem neprojde');
-    t.ok(pickSpotlight([v('x', 'Coven Janna Skin Spotlight')], 'Dawnbringer Janna') === null, 'jiny skin neprojde');
-    t.ok((pickSpotlight([v('kda', 'K/DA ALL OUT Ahri Skin Spotlight - League of Legends')], 'K/DA ALL OUT Ahri') || {}).id === 'kda', 'lomitka a velka pismena nevadi');
-    t.ok((pickSpotlight([v('ks', "Star Guardian Kai'Sa Skin Spotlight")], "Star Guardian Kai'Sa") || {}).id === 'ks', 'apostrof nevadi');
-    t.ok(pickSpotlight(list, '') === null, 'prazdne jmeno = nic');
-  }
-  t.ok(/if \(!videos\.length\) throw/.test(src) && /if \(!pick\) return \{ videoId: null \}/.test(src),
-    'rozbita stranka ani neuspech se nezapamatuji (drive otravilo cache)');
+  t.section('zadne stahovani YouTube');
+  t.ok(!/youtube|spotlight/i.test(src), 'server nestahuje stranky YouTube (podminky YouTube to zakazuji)');
+
 
   t.section('cache obrazku');
   const re = src.match(/const GAME_ASSETS = (\/.*\/i);/);

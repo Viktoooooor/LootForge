@@ -30,7 +30,7 @@ const t = suite('bezpecnost');
   const buyFn = src.match(/async function purchase\([\s\S]*?\n\}/);
   t.ok(buyFn && buyFn[0].indexOf('isTest') > -1 && buyFn[0].indexOf('isTest') < buyFn[0].indexOf('lcu('),
     'purchase() odchyti testovaci nabidku DRIV, nez cokoliv posle');
-  t.ok(buyFn && /Failure|failure/.test(buyFn[0]) && /nepotvrdil/.test(buyFn[0]), 'purchase() ceka na vysledek a nehlasi uspech naslepo');
+  t.ok(buyFn && /Failure|failure/.test(buyFn[0]) && /not confirmed/.test(buyFn[0]), 'purchase() ceka na vysledek a nehlasi uspech naslepo');
 
   const status = await clientStatus();
   if (!status.client) t.skip('zbytek potrebuje bezici server a prihlaseneho klienta');
@@ -40,7 +40,7 @@ const t = suite('bezpecnost');
     'state', 'loadLoot', 'itemsIn', 'disenchant', 'upgrade', 'openTestChest', 'isMixedBatch',
   ]);
   const $ = env.pick;
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   await app.loadLoot();
   const S = app.state;
   const tests = S.items.filter((i) => i.isTest);
@@ -55,23 +55,23 @@ const t = suite('bezpecnost');
 
   await app.disenchant([testSkin.lootId]);
   t.ok(env.posts.length === 0, 'rozlozeni testovaciho shardu: zadny POST');
-  t.ok(/oranzova esence/i.test($('#reveal-cards').children.map((c) => c.children.map((x) => x.innerHTML).join('')).join('')),
+  t.ok(/orange essence/i.test($('#reveal-cards').children.map((c) => c.children.map((x) => x.innerHTML).join('')).join('')),
     'dostal jsi oranzovou esenci (simulovane)');
 
   await app.upgrade(testSkin.lootId);
   t.ok(env.posts.length === 0, 'odemknuti testovaciho shardu: zadny POST');
-  t.ok(!env.mem['gamba.stats'] && !env.mem['gamba.history'], 'do statistik ani historie nic');
+  t.ok(!env.mem['lootforge.stats'] && !env.mem['lootforge.history'], 'do statistik ani historie nic');
 
   t.section('michani');
   t.ok(app.isMixedBatch([realSkins[0].lootId, testSkin.lootId]), 'mix se rozpozna');
   $('#toast').textContent = '';
   await app.disenchant([realSkins[0].lootId, testSkin.lootId]);
-  t.ok(env.posts.length === 0 && /Nemichej/.test($('#toast').textContent), `odmitnuto: "${$('#toast').textContent}"`);
+  t.ok(env.posts.length === 0 && /Don't mix/.test($('#toast').textContent), `odmitnuto: "${$('#toast').textContent}"`);
 
   t.section('ostra cesta (POST zablokovany harnessem)');
   await app.disenchant([realSkins[0].lootId]);
   t.ok(env.posts.length === 1 && /SKIN_RENTAL_disenchant\/craft/.test(env.posts[0]), `miri na klienta: ${env.posts[0]}`);
-  t.ok(!env.mem['gamba.stats'], 'neuspesny craft se do statistik nepocita');
+  t.ok(!env.mem['lootforge.stats'], 'neuspesny craft se do statistik nepocita');
 
   t.section('vypadek klienta');
   env.posts.length = 0;
@@ -81,7 +81,7 @@ const t = suite('bezpecnost');
   });
   await app.disenchant(realSkins.slice(0, 4).map((i) => i.lootId));
   t.ok(env.posts.length === 1, `ctyri shardy, klient odpadl -> zastaveno po ${env.posts.length}. pokusu`);
-  t.ok(/prestal odpovidat/.test($('#toast').textContent), `jedna srozumitelna hlaska: "${$('#toast').textContent}"`);
+  t.ok(/stopped responding/.test($('#toast').textContent), `jedna srozumitelna hlaska: "${$('#toast').textContent}"`);
   env.postResponse = null;
 
   await sleep(50);

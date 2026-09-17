@@ -15,3 +15,6 @@ desktop.ini
 .vscode/
 .idea/
 .claude/settings.local.json
+
+# build exe a release zip (npm run build)
+dist/

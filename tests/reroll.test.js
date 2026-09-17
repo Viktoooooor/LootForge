@@ -20,7 +20,7 @@ const t = suite('reroll');
     'suggestReroll', 'rerollSelected', 'alreadyOwned',
   ]);
   const $ = env.pick;
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   await app.loadLoot();
   const S = app.state;
   const skins = app.itemsIn('skins');
@@ -39,14 +39,14 @@ const t = suite('reroll');
 
   app.toggleSelect(real[0].lootId);
   app.toggleSelect(real[1].lootId);
-  t.ok(/jeste 1 skin shard/.test($('#rr-hint').textContent), `napoveda: "${$('#rr-hint').textContent}"`);
+  t.ok(/Pick 1 more skin shard/.test($('#rr-hint').textContent), `napoveda: "${$('#rr-hint').textContent}"`);
   app.toggleSelect(real[2].lootId);
   t.ok(S.selected.size === 3 && !$('#rr-go').disabled, '3/3 odemkne tlacitko');
   t.ok(($('#rr-slots').innerHTML.match(/is-filled/g) || []).length === 3, 'tri plne sloty');
 
   t.section('pojistky');
   app.toggleSelect(real[3].lootId);
-  t.ok(S.selected.size === 3 && /presne 3/.test($('#toast').textContent), `ctvrty neprojde: "${$('#toast').textContent}"`);
+  t.ok(S.selected.size === 3 && /exactly 3/.test($('#toast').textContent), `ctvrty neprojde: "${$('#toast').textContent}"`);
   app.toggleSelect(real[0].lootId);
   app.toggleSelect(tests[0].lootId);
   t.ok(!S.selected.has(tests[0].lootId), 'testovaci k ostrym neprojde');
@@ -54,7 +54,7 @@ const t = suite('reroll');
   // i kdyby se vyber nejak dostal na ctyri, reroll nesmi vzit libovolne tri
   S.selected = new Set(real.slice(0, 4).map((i) => i.lootId));
   await app.rerollSelected();
-  t.ok(env.posts.length === 0 && /presne 3/.test($('#toast').textContent), `4 vybrane -> odmitnuto: "${$('#toast').textContent}"`);
+  t.ok(env.posts.length === 0 && /exactly 3/.test($('#toast').textContent), `4 vybrane -> odmitnuto: "${$('#toast').textContent}"`);
 
   t.section('navrh');
   app.suggestReroll();
@@ -75,7 +75,7 @@ const t = suite('reroll');
   const text = $('#modal-text').textContent;
   t.ok(tests.every((i) => text.includes(i.itemDesc)), 'potvrzeni vyjmenuje vsechny tri');
   t.ok(env.posts.length === 0, 'zadny POST');
-  t.ok(!env.mem['gamba.stats'] && !env.mem['gamba.history'], 'nic do statistik ani historie');
+  t.ok(!env.mem['lootforge.stats'] && !env.mem['lootforge.history'], 'nic do statistik ani historie');
   const stage = $('#reveal-cards').children[0] && $('#reveal-cards').children[0].children[0];
   t.ok(stage && String(stage.className).startsWith('rr-stage'), 'prehrala se animace rerollu');
   t.ok(S.rerollMode, 'rezim zustane zapnuty na dalsi reroll');

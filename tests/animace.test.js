@@ -45,7 +45,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   // -------------------------------------------------------- pet pasu + vypln
   t.section('pet pasu a vypln');
   host = env.el();
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   env.log.length = 0;
   const multi = Reel.playMulti([1, 2, 3, 4, 5].map((i) => drop('Vyhra' + i, i === 3 ? 'ULTIMATE' : 'EPIC')), filler, host);
   // zare sceny nesmi prozradit nejlepsi drop, dokud vsechny pasy nedojedou
@@ -100,11 +100,11 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   stage = host.children[0];
   t.ok(phases('phase-').join(',') === 'charge,burst,open', `faze: ${phases('phase-').join(' > ')}`);
   t.ok(!/reel-strip/.test(stage.innerHTML), 'zadna ruleta (vysledek se nelosuje)');
-  t.ok(stage._q['.unlock-label'].textContent === 'ODEMCENO NATRVALO', 'titulek');
+  t.ok(stage._q['.unlock-label'].textContent === 'UNLOCKED', 'titulek');
 
   // ------------------------------------------------------------------- reroll
   t.section('reroll');
-  delete env.mem['gamba.fast'];
+  delete env.mem['lootforge.fast'];
   host = env.el();
   env.log.length = 0;
   const offered = [drop('A', 'EPIC'), drop('B'), drop('C', 'LEGENDARY')];
@@ -129,6 +129,59 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   t.ok(/mythic/.test(stage._vars['--win']), 'v rozkvetu barva vysledku');
   t.ok(stage._q['.rr-portal']._q.img.src === result.img, 'portal skonci na vysledku');
   t.ok(stage.classList.contains('is-big'), 'mythic = velky otres');
+  t.ok(stage._q['.rr-label'].textContent === 'NEW SKIN', 'titulek rozkvetu');
+
+  // ------------------------------------------------- cela kresba pri zvetseni
+  t.section('cela kresba pri zvetseni');
+  // karta pri odemknuti a portal pri rerollu maji az 900 px - ctvercovy vyrez
+  // 380x380 by se tam jen rozmazal. Obrazky "nacita" napodobenina Image.
+  let loadDelay = 5;
+  global.Image = function FakeImage() {
+    const im = {};
+    let src = '';
+    Object.defineProperty(im, 'src', {
+      get: () => src,
+      set(v) {
+        src = v;
+        setTimeout(() => (/NEEXISTUJE/.test(v) ? im.onerror && im.onerror() : im.onload && im.onload()), loadDelay);
+      },
+    });
+    return im;
+  };
+  env.mem['lootforge.fast'] = '1';
+  const withArt = (name, splash) => ({ ...drop(name, 'LEGENDARY'), splash });
+  const varus = withArt('Varus', '/lcu/lol-game-data/assets/ASSETS/Characters/Varus/Skins/Base/Images/varus_splash_centered_0.jpg');
+  const uncentered = '/lcu/lol-game-data/assets/ASSETS/Characters/Varus/Skins/Base/Images/varus_splash_uncentered_0.jpg';
+  t.ok(Reel.fullArtUrl(varus) === uncentered && Reel.fullArtUrl(drop('Bez')) === '', 'centered -> uncentered, bez splashe nic');
+
+  host = env.el();
+  await Reel.unlock(varus, host);
+  t.ok(host.children[0]._q['.unlock-card img'].src === uncentered, 'odemknuti sampiona: velka karta ma celou kresbu');
+  t.ok(!/is-icon/.test(host.children[0].innerHTML), 'kresba se neoznaci jako ikona');
+
+  loadDelay = 1500;   // kresba dorazi az po zvetseni karty (rychly obrad trva ~800 ms)
+  host = env.el();
+  await Reel.unlock(varus, host);
+  const lateCard = host.children[0]._q['.unlock-card img'];
+  t.ok(lateCard.src !== uncentered, 'pomale nacitani: do te doby zustane vyrez');
+  await sleep(1600);
+  t.ok(lateCard.src === uncentered, '...a jakmile se kresba nacte, vymeni se');
+  loadDelay = 5;
+
+  host = env.el();
+  await Reel.unlock(withArt('Rozbity', '/lcu/NEEXISTUJE_splash_centered_1.jpg'), host);
+  t.ok(host.children[0]._q['.unlock-card img'].src === '', 'kresba neexistuje: zustane puvodni obrazek');
+
+  host = env.el();
+  await Reel.unlock({ ...drop('Ikona'), icon: true }, host);
+  t.ok(/unlock-card is-icon/.test(host.children[0].innerHTML), 'ikona z obchodu bez kresby: cela a ostra, ne roztazena');
+
+  host = env.el();
+  await Reel.reroll(offered, withArt('Novy', '/lcu/x/janna_splash_centered_66.jpg'), filler, host);
+  t.ok(host.children[0]._q['.rr-portal']._q.img.src === '/lcu/x/janna_splash_uncentered_66.jpg', 'reroll: v rozkvetu cela kresba noveho skinu');
+
+  delete global.Image;
+  delete env.mem['lootforge.fast'];
 
   // ---------------------------------------------------------- skip + rychle
   t.section('skip a rychly rezim');
@@ -148,7 +201,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
     t.ok(after < 500, `${name}: skip dojede za ${after} ms`);
   }
 
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   // kaskada ma dva pruchody (rarita, pak odhaleni), proto vic nez ruleta
   const limits = { ruleta: 2300, 'pet pasu': 3200, kaskada: 2600, obrad: 1200, reroll: 2600 };
   for (const [name, fn] of [
@@ -164,20 +217,20 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
 
   t.section('Motion');
   t.ok(Reel.Motion.t(4300) < 1200, `rychly rezim zkracuje: 4300 -> ${Reel.Motion.t(4300)}`);
-  delete env.mem['gamba.fast'];
+  delete env.mem['lootforge.fast'];
   t.ok(Reel.Motion.t(4300) === 4300, 'bez rychleho rezimu beze zmeny');
   global.matchMedia = () => ({ matches: true });
   t.ok(Reel.Motion.fast === true, 'systemove omezeni pohybu zapne rychly rezim, dokud si uzivatel nevybere');
-  env.mem['gamba.fast'] = '0';
+  env.mem['lootforge.fast'] = '0';
   t.ok(Reel.Motion.fast === false, 'volba uzivatele ma prednost pred systemem');
 
   t.section('zvuk');
-  env.mem['gamba.mute'] = '0';
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.mute'] = '0';
+  env.mem['lootforge.fast'] = '1';
   env.sound.osc = 0; env.sound.noise = 0;
   await Reel.reroll(offered, result, filler, env.el());
   t.ok(env.sound.osc > 20 && env.sound.noise > 5, `reroll hraje (oscilatoru ${env.sound.osc}, sumu ${env.sound.noise})`);
-  env.mem['gamba.mute'] = '1';
+  env.mem['lootforge.mute'] = '1';
   env.sound.osc = 0; env.sound.noise = 0;
   await Reel.unlock(drop('U'), env.el());
   t.ok(env.sound.osc === 0 && env.sound.noise === 0, 'ztlumeno = ticho');

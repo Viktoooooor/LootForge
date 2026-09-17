@@ -1,40 +1,62 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hextech Gamba</title>
+<title>LootForge</title>
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="reel.css">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">HEXTECH<em>GAMBA</em></div>
-  <div class="wallet" id="wallet"></div>
-  <div class="conn" id="conn" title="Stav pripojeni ke klientovi">
-    <span class="dot"></span><span class="conn-label">pripojuji…</span>
+<!-- uvodni obrazovka: pripojovani ke klientovi -->
+<div class="boot is-searching" id="boot">
+  <div class="boot-inner">
+    <div class="boot-emblem" aria-hidden="true">
+      <i class="boot-ring boot-r1"></i>
+      <i class="boot-ring boot-r2"></i>
+      <i class="boot-ring boot-r3"></i>
+      <i class="boot-orbit"><b></b></i>
+      <i class="boot-shock"></i>
+      <span class="boot-core"><span class="boot-check"></span></span>
+    </div>
+    <div class="boot-brand">LOOT<em>FORGE</em></div>
+    <div class="boot-status" id="boot-status" role="status">Looking for the League client…</div>
+    <div class="boot-name" id="boot-name"></div>
+    <p class="boot-hint" id="boot-hint" hidden></p>
   </div>
+</div>
+
+<header class="topbar">
+  <div class="brand">LOOT<em>FORGE</em></div>
+  <div class="wallet" id="wallet"></div>
+  <div class="conn" id="conn" title="Connection to the League client">
+    <span class="dot"></span><span class="conn-label">connecting…</span>
+  </div>
+  <a class="update-pill" id="update" href="#" target="_blank" rel="noopener" hidden></a>
+  <button class="ghost-btn settings-btn" id="settings-open" title="Settings">Settings</button>
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab-btn is-active" data-tab="chests">Bedny <span class="pill" data-count="chests">0</span></button>
-  <button class="tab-btn" data-tab="skins">Skin shardy <span class="pill" data-count="skins">0</span></button>
-  <button class="tab-btn" data-tab="champs">Champion shardy <span class="pill" data-count="champs">0</span></button>
-  <button class="tab-btn" data-tab="other">Ostatni <span class="pill" data-count="other">0</span></button>
-  <button class="tab-btn" data-tab="shop">Mythic shop <span class="pill" data-count="shop">-</span></button>
-  <button class="tab-btn" data-tab="session">Session</button>
-  <button class="ghost-btn" id="refresh" title="Znovu nacist loot z klienta">Obnovit</button>
+  <button class="tab-btn is-active" data-tab="chests">Chests <span class="pill" data-count="chests">0</span></button>
+  <button class="tab-btn" data-tab="skins">Skin shards <span class="pill" data-count="skins">0</span></button>
+  <button class="tab-btn" data-tab="champs">Champion shards <span class="pill" data-count="champs">0</span></button>
+  <button class="tab-btn" data-tab="other">Other <span class="pill" data-count="other">0</span></button>
+  <button class="tab-btn" data-tab="shop">Mythic Shop <span class="pill" data-count="shop">-</span></button>
+  <button class="tab-btn" data-tab="collection">Collection</button>
+  <button class="tab-btn" data-tab="session">Stats</button>
+  <button class="ghost-btn cleanup-btn" id="cleanup-open" title="Disenchant what you don't need, in bulk">Clean up</button>
+  <button class="ghost-btn" id="refresh" title="Reload loot from the client">Refresh</button>
 </nav>
 
 <main>
   <section class="panel is-active" data-panel="chests">
     <div class="panel-head">
       <div>
-        <h2>Bedny, kapsle &amp; orby</h2>
-        <p class="sub" id="chests-sub">Vse, co jde otevrit.</p>
+        <h2>Chests, capsules &amp; orbs</h2>
+        <p class="sub" id="chests-sub">Everything you can open.</p>
       </div>
-      <button class="big-btn" id="open-all" disabled>Otevrit vse</button>
+      <button class="big-btn" id="open-all" disabled>Open all</button>
     </div>
     <div class="groups" id="grid-chests"></div>
   </section>
@@ -42,15 +64,40 @@
   <section class="panel" data-panel="skins">
     <div class="panel-head">
       <div>
-        <h2>Skin shardy</h2>
-        <p class="sub">Shardy odemkni za oranzovou esenci, rozloz je, nebo rerolluj 3 za nahodny skin.</p>
+        <h2>Skin shards</h2>
+        <p class="sub">Unlock shards with Orange Essence, disenchant them, or reroll 3 into a random skin.</p>
       </div>
       <div class="filters">
-        <button class="ghost-btn" id="reroll-mode" title="Tri skin shardy za jeden nahodny skin natrvalo">Reroll</button>
-        <button class="ghost-btn" data-select="all" data-scope="skins">Vybrat vse</button>
-        <button class="ghost-btn" data-select="owned" data-scope="skins">Jen uz vlastnene</button>
-        <button class="ghost-btn" data-select="none" data-scope="skins">Zrusit vyber</button>
+        <button class="ghost-btn" id="reroll-mode" title="Three skin shards for one random permanent skin">Reroll</button>
+        <button class="ghost-btn" data-select="all" data-scope="skins">Select all</button>
+        <button class="ghost-btn" data-select="owned" data-scope="skins">Select owned</button>
+        <button class="ghost-btn" data-select="none" data-scope="skins">Clear selection</button>
       </div>
+    </div>
+    <div class="filterbar">
+      <input type="search" class="f-search" data-f="q" data-scope="skins" placeholder="Search (also by champion)…" autocomplete="off">
+      <select data-f="rarity" data-scope="skins" title="Rarity">
+        <option value="">All rarities</option>
+        <option value="DEFAULT">No rarity</option>
+        <option value="EPIC">Epic</option>
+        <option value="LEGENDARY">Legendary</option>
+        <option value="MYTHIC">Mythic</option>
+        <option value="ULTIMATE">Ultimate</option>
+      </select>
+      <select data-f="own" data-scope="skins" title="Ownership">
+        <option value="">Owned and not owned</option>
+        <option value="owned">Already owned</option>
+        <option value="missing">Not owned</option>
+        <option value="fav">Starred</option>
+      </select>
+      <select data-f="sort" data-scope="skins" title="Sort">
+        <option value="rarity">Sort by rarity</option>
+        <option value="value">Sort by essence value</option>
+        <option value="count">Sort by count</option>
+        <option value="name">Sort by name</option>
+      </select>
+      <span class="f-count" id="fcount-skins"></span>
+      <button class="ghost-btn" id="freset-skins" data-freset="skins" hidden>Reset filter</button>
     </div>
     <div class="groups" id="grid-skins"></div>
   </section>
@@ -58,14 +105,31 @@
   <section class="panel" data-panel="champs">
     <div class="panel-head">
       <div>
-        <h2>Champion shardy</h2>
-        <p class="sub">Shardy jsou k odemceni, permanenty uz mas. Oboji jde rozlozit na modrou esenci.</p>
+        <h2>Champion shards</h2>
+        <p class="sub">Shards can be unlocked, permanents are already yours. Both disenchant into Blue Essence.</p>
       </div>
       <div class="filters">
-        <button class="ghost-btn" data-select="all" data-scope="champs">Vybrat vse</button>
-        <button class="ghost-btn" data-select="owned" data-scope="champs">Jen uz vlastnene</button>
-        <button class="ghost-btn" data-select="none" data-scope="champs">Zrusit vyber</button>
+        <button class="ghost-btn" data-select="all" data-scope="champs">Select all</button>
+        <button class="ghost-btn" data-select="owned" data-scope="champs">Select owned</button>
+        <button class="ghost-btn" data-select="none" data-scope="champs">Clear selection</button>
       </div>
+    </div>
+    <div class="filterbar">
+      <input type="search" class="f-search" data-f="q" data-scope="champs" placeholder="Search…" autocomplete="off">
+      <select data-f="own" data-scope="champs" title="Ownership">
+        <option value="">Owned and not owned</option>
+        <option value="owned">Already owned</option>
+        <option value="missing">Not owned</option>
+        <option value="fav">Starred</option>
+      </select>
+      <select data-f="sort" data-scope="champs" title="Sort">
+        <option value="rarity">Sort by rarity</option>
+        <option value="value">Sort by essence value</option>
+        <option value="count">Sort by count</option>
+        <option value="name">Sort by name</option>
+      </select>
+      <span class="f-count" id="fcount-champs"></span>
+      <button class="ghost-btn" id="freset-champs" data-freset="champs" hidden>Reset filter</button>
     </div>
     <div class="groups" id="grid-champs"></div>
   </section>
@@ -73,44 +137,104 @@
   <section class="panel" data-panel="shop">
     <div class="panel-head">
       <div>
-        <h2>Mythic shop</h2>
-        <p class="sub">Prestige skiny, chromy, ikony a emoty za mythic esenci. Nabidka se toci podle rotaci.</p>
+        <h2>Mythic Shop</h2>
+        <p class="sub">Prestige skins, chromas, icons and emotes for Mythic Essence. Purchasing is experimental - double-check the result in the client.</p>
       </div>
       <div class="shop-balance" id="shop-balance"></div>
     </div>
-    <div class="groups" id="grid-shop"><div class="empty">Nacitam obchod…</div></div>
+    <div class="groups" id="grid-shop"><div class="empty">Loading the shop…</div></div>
   </section>
 
   <section class="panel" data-panel="other">
     <div class="panel-head">
       <div>
-        <h2>Ostatni loot</h2>
-        <p class="sub">Ward skiny, emoty, materialy a vsechno, co nezapadlo jinam.</p>
+        <h2>Other loot</h2>
+        <p class="sub">Ward skins, emotes, materials and everything else.</p>
       </div>
     </div>
+    <div class="filterbar">
+      <input type="search" class="f-search" data-f="q" data-scope="other" placeholder="Search…" autocomplete="off">
+      <select data-f="own" data-scope="other" title="Ownership">
+        <option value="">Owned and not owned</option>
+        <option value="owned">Already owned</option>
+        <option value="missing">Not owned</option>
+        <option value="fav">Starred</option>
+      </select>
+      <select data-f="sort" data-scope="other" title="Sort">
+        <option value="rarity">Sort by rarity</option>
+        <option value="value">Sort by essence value</option>
+        <option value="count">Sort by count</option>
+        <option value="name">Sort by name</option>
+      </select>
+      <span class="f-count" id="fcount-other"></span>
+      <button class="ghost-btn" id="freset-other" data-freset="other" hidden>Reset filter</button>
+    </div>
     <div class="groups" id="grid-other"></div>
+  </section>
+
+  <section class="panel" data-panel="collection">
+    <div class="panel-head">
+      <div>
+        <h2>Collection</h2>
+        <p class="sub">Everything you own permanently. Click a skin for details, a champion for their skins.</p>
+      </div>
+    </div>
+    <div class="col-kinds" id="col-kinds"></div>
+    <div class="filterbar">
+      <input type="search" class="f-search" id="col-search" data-col="q" placeholder="Search…" autocomplete="off">
+      <select id="col-rarity" data-col="rarity" title="Rarity">
+        <option value="">All rarities</option>
+        <option value="EPIC">Epic</option>
+        <option value="LEGENDARY">Legendary</option>
+        <option value="MYTHIC">Mythic</option>
+        <option value="ULTIMATE">Ultimate</option>
+        <option value="TRANSCENDENT">Transcendent</option>
+        <option value="EXALTED">Exalted</option>
+        <option value="DEFAULT">No rarity</option>
+      </select>
+      <select id="col-sort" data-col="sort" title="Sort"></select>
+      <span class="f-count" id="col-count"></span>
+    </div>
+    <div class="groups" id="grid-collection"><div class="empty">Loading your collection…</div></div>
   </section>
 
   <section class="panel" data-panel="session">
     <div class="panel-head">
       <div>
-        <h2>Tahle session</h2>
-        <p class="sub">Co ti dneska vypadlo a co te to stalo.</p>
+        <h2>Stats</h2>
+        <p class="sub">What you got and what it cost. Stored only in this browser. <span id="stats-since"></span></p>
       </div>
-      <button class="ghost-btn" id="clear-session">Vymazat historii</button>
+      <div class="filters">
+        <button class="ghost-btn" id="export-stats" title="Download stats and history as JSON">Export</button>
+        <button class="ghost-btn" id="clear-session">Clear</button>
+      </div>
     </div>
     <div class="stats" id="stats"></div>
+    <div class="charts" id="stats-charts"></div>
+    <h3 class="history-title">History</h3>
     <div class="history" id="history"></div>
   </section>
 </main>
+
+<footer class="legal">
+  <p>
+    <b>LootForge <span id="app-version">v1.0.0</span></b> &middot; free and open source (MIT) &middot; unofficial tool that talks to the League client on your PC.
+  </p>
+  <p>
+    LootForge was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games.
+    Riot Games does not endorse or sponsor this project. LootForge isn't endorsed by Riot Games and doesn't
+    reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games
+    properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+  </p>
+</footer>
 
 <!-- lista akci pro vybrane shardy -->
 <div class="actionbar" id="actionbar" hidden>
   <span class="ab-count" id="ab-count"></span>
   <span class="ab-value" id="ab-value"></span>
   <div class="ab-buttons">
-    <button class="ghost-btn" id="ab-clear">Zrusit</button>
-    <button class="big-btn danger" id="ab-disenchant">Rozlozit</button>
+    <button class="ghost-btn" id="ab-clear">Cancel</button>
+    <button class="big-btn danger" id="ab-disenchant">Disenchant</button>
   </div>
 </div>
 
@@ -119,12 +243,12 @@
   <div class="rr-slots" id="rr-slots"></div>
   <div class="rr-info">
     <b>REROLL</b>
-    <span id="rr-hint">Vyber 3 skin shardy.</span>
+    <span id="rr-hint">Pick 3 skin shards.</span>
   </div>
   <div class="ab-buttons">
-    <button class="ghost-btn" id="rr-suggest" title="Vybere tri nejlevnejsi shardy, duplikaty maji prednost">Navrhnout 3</button>
-    <button class="ghost-btn" id="rr-cancel">Zrusit</button>
-    <button class="big-btn" id="rr-go" disabled>Rerollnout</button>
+    <button class="ghost-btn" id="rr-suggest" title="Picks the three cheapest shards, duplicates first">Suggest 3</button>
+    <button class="ghost-btn" id="rr-cancel">Cancel</button>
+    <button class="big-btn" id="rr-go" disabled>Reroll</button>
   </div>
 </div>
 
@@ -132,28 +256,113 @@
 <div class="reveal" id="reveal" hidden>
   <div class="reveal-gate"><i class="gate-top"></i><i class="gate-bot"></i><i class="gate-line"></i></div>
   <div class="reveal-inner">
-    <h3 id="reveal-title">Otevirani…</h3>
+    <h3 id="reveal-title">Opening…</h3>
+    <div class="reveal-progress" id="reveal-progress" hidden>
+      <span class="reveal-progress-track"><i id="reveal-progress-bar"></i></span>
+      <span id="reveal-progress-text"></span>
+    </div>
     <div class="reveal-cards" id="reveal-cards"></div>
     <div class="reveal-foot">
-      <button class="ghost-btn sfx-btn" id="sfx-toggle">Zvuk</button>
-      <button class="ghost-btn fast-btn" id="fast-toggle" title="Zkracene animace pro hromadne otevirani">Rychle</button>
-      <button class="ghost-btn" id="reveal-skip" hidden>Preskocit animaci</button>
-      <button class="big-btn" id="reveal-close" hidden>Hotovo</button>
+      <button class="ghost-btn sfx-btn" id="sfx-toggle">Sound</button>
+      <button class="ghost-btn fast-btn" id="fast-toggle" title="Shorter animations for bulk opening">Fast</button>
+      <button class="ghost-btn" id="reveal-stop" hidden title="Finishes the batch that is already running, then stops">Stop after this batch</button>
+      <button class="ghost-btn" id="reveal-skip" hidden>Skip animation</button>
+      <button class="big-btn" id="reveal-close" hidden>Done</button>
     </div>
   </div>
 </div>
 
-<!-- detail skinu / sampiona: cely splash a skiny, ktere na nej uz mas -->
+<!-- detail skinu: cely splash, video, chromy a skiny na sampiona -->
 <div class="detail" id="detail" hidden>
   <div class="detail-box" id="detail-box">
-    <button class="detail-close" id="detail-close" title="Zavrit (Esc)">&times;</button>
+    <button class="detail-close" id="detail-close" title="Close (Esc)">&times;</button>
     <div class="detail-art" id="detail-art">
       <img id="detail-img" alt="">
       <div class="detail-video" id="detail-video"></div>
+      <div class="detail-chroma" id="detail-chroma"></div>
       <div class="detail-caption" id="detail-caption"></div>
     </div>
     <div class="detail-info" id="detail-info"></div>
+    <div id="detail-chromas"></div>
     <div id="detail-skins"></div>
+  </div>
+</div>
+
+<!-- uklid inventare: pravidla hromadneho rozkladani -->
+<div class="cleanup" id="cleanup" hidden>
+  <div class="cleanup-box">
+    <button class="detail-close" id="cleanup-close" title="Close (Esc)">&times;</button>
+    <div class="cleanup-head">
+      <h2>Clean up inventory</h2>
+      <p class="sub">Tick the rules you want. Click an item to keep it. You confirm once more before anything is disenchanted.</p>
+    </div>
+    <div class="cleanup-rules" id="cleanup-rules"></div>
+    <div class="cleanup-foot">
+      <span class="cleanup-total" id="cleanup-total"></span>
+      <button class="big-btn danger" id="cleanup-go" disabled>Disenchant</button>
+    </div>
+  </div>
+</div>
+
+<!-- nastaveni -->
+<div class="cleanup" id="settings" hidden>
+  <div class="cleanup-box settings-box">
+    <button class="detail-close" id="settings-close" title="Close (Esc)">&times;</button>
+    <div class="cleanup-head">
+      <h2>Settings</h2>
+      <p class="sub">Stored only in this browser.</p>
+    </div>
+    <section class="set-row">
+      <h3>Skin video previews</h3>
+      <p>
+        Without a key, <b>Video preview</b> opens a SkinSpotlights search on YouTube in a new tab.
+        With your own <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener">YouTube Data API key</a>
+        (free, about 100 searches a day) the video plays right inside LootForge.
+        The key and the skin name are sent only to Google.
+      </p>
+      <div class="set-key">
+        <input type="password" id="yt-key" placeholder="YouTube Data API key" autocomplete="off" spellcheck="false">
+        <button class="ghost-btn" id="yt-key-save">Save</button>
+        <button class="ghost-btn" id="yt-key-clear">Remove</button>
+      </div>
+      <p class="set-status" id="yt-key-status"></p>
+    </section>
+    <section class="set-row">
+      <label class="set-check">
+        <input type="checkbox" id="test-items">
+        <span>Show test items<em>A simulated chest, shards and shop offer for trying out the animations. They never touch your account.</em></span>
+      </label>
+    </section>
+    <section class="set-row">
+      <label class="set-check">
+        <input type="checkbox" id="update-check">
+        <span>Check for new versions<em>Asks GitHub for the latest release at most twice a day. Nothing else is sent.</em></span>
+      </label>
+      <p class="set-status" id="update-status"></p>
+    </section>
+    <section class="set-row">
+      <label class="set-check">
+        <input type="checkbox" id="show-welcome">
+        <span>Show the safety notice on the next start</span>
+      </label>
+    </section>
+  </div>
+</div>
+
+<!-- prvni spusteni: co appka dela a co ne -->
+<div class="modal" id="welcome" hidden>
+  <div class="modal-box welcome-box">
+    <h3>Welcome to LootForge</h3>
+    <p>LootForge is an <b>unofficial</b> tool. It talks to the League client running on this PC and sends the same requests the client's own loot screen sends.</p>
+    <ul>
+      <li><b>Everything is real.</b> Opening, disenchanting, unlocking, rerolling and buying change your actual account and cannot be undone. LootForge asks before anything irreversible.</li>
+      <li><b>It stays on your PC.</b> The app only listens on 127.0.0.1. Your client token never leaves this computer.</li>
+      <li><b>No cheats.</b> No injection, no memory reading, no game file changes.</li>
+      <li><b>Use at your own risk.</b> The League client API is not officially supported by Riot Games and can change at any time.</li>
+    </ul>
+    <div class="modal-buttons">
+      <button class="big-btn" id="welcome-ok">I understand</button>
+    </div>
   </div>
 </div>
 
@@ -164,8 +373,8 @@
     <p id="modal-text"></p>
     <div id="modal-extra"></div>
     <div class="modal-buttons">
-      <button class="ghost-btn" id="modal-cancel">Zpet</button>
-      <button class="big-btn danger" id="modal-ok">Potvrdit</button>
+      <button class="ghost-btn" id="modal-cancel">Back</button>
+      <button class="big-btn danger" id="modal-ok">Confirm</button>
     </div>
   </div>
 </div>

@@ -16,7 +16,7 @@ const Reel = globalThis.Reel;
 const drop = (name, rarity) => ({ name, img: `/lcu/${name}.jpg`, rarity: rarity || 'DEFAULT', count: 1, type: 'SKIN_RENTAL' });
 
 (async () => {
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
 
   t.section('brana a zamek rolovani');
   t.ok($('#reveal').hidden && $('#modal').hidden, 'na startu je odhaleni i potvrzeni schovane');
@@ -91,9 +91,9 @@ const drop = (name, rarity) => ({ name, img: `/lcu/${name}.jpg`, rarity: rarity 
 
   // vic veci: souhrn se sloucenim, soucty a poradim
   const mixed = [
-    { name: 'Oranzova esence', img: '/lcu/oe.png', icon: true, rarity: 'DEFAULT', count: 270, type: 'CURRENCY' },
+    { name: 'Orange Essence', img: '/lcu/oe.png', icon: true, rarity: 'DEFAULT', count: 270, type: 'CURRENCY' },
     { name: 'Star Guardian Kaisa', img: '/lcu/k.jpg', rarity: 'LEGENDARY', count: 1, type: 'SKIN_RENTAL' },
-    { name: 'Oranzova esence', img: '/lcu/oe.png', icon: true, rarity: 'DEFAULT', count: 150, type: 'CURRENCY' },
+    { name: 'Orange Essence', img: '/lcu/oe.png', icon: true, rarity: 'DEFAULT', count: 150, type: 'CURRENCY' },
     { name: 'Annie', img: '/lcu/a.jpg', rarity: 'DEFAULT', count: 1, type: 'CHAMPION_RENTAL' },
     { name: 'Dawnbringer Renekton', img: '/lcu/r.jpg', rarity: 'EPIC', count: 1, type: 'SKIN_RENTAL' },
     { name: 'Bez obrazku', img: '', rarity: 'EPIC', count: 1, type: 'SKIN_RENTAL' },
@@ -103,9 +103,9 @@ const drop = (name, rarity) => ({ name, img: `/lcu/${name}.jpg`, rarity: rarity 
   const host = $('#reveal-cards').children[0];
   html = host ? host.innerHTML : '';
   t.ok(/class="summary"/.test(html), 'vic veci = souhrn misto animace');
-  t.ok(/CO TI PADLO/.test(html) && /6 predmetu/.test(html), 'nadpis a pocet');
-  t.ok(/3 skin shardy/.test(html) && /1 champion shard/.test(html), 'soucty podle druhu s ceskymi tvary');
-  t.ok(/\+420 oranzova esence/.test(html), 'stejna esence z vice beden se secte (270 + 150)');
+  t.ok(/YOUR DROPS/.test(html) && /6 items/.test(html), 'nadpis a pocet');
+  t.ok(/3 skin shards/.test(html) && /1 champion shard</.test(html), 'soucty podle druhu (jednotne a mnozne cislo)');
+  t.ok(/\+420 orange essence/.test(html), 'stejna esence z vice beden se secte (270 + 150)');
   const order = [...html.matchAll(/sum-card rare-(\w+)/g)].map((m) => m[1]);
   t.ok(order[0] === 'LEGENDARY' && order.indexOf('DEFAULT') > order.lastIndexOf('EPIC'), `serazene od nejvzacnejsiho: ${order.join(' > ')}`);
   t.ok((html.match(/sum-card /g) || []).length === 5, 'esence slouceny do jedne karty (5 karet ze 6 dropu)');

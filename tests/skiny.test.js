@@ -44,10 +44,10 @@ const t = suite('skiny');
   const app = env.load(['reel.js', 'simulator.js', 'app.js'], [
     'state', 'loadLoot', 'itemsIn', 'cardHtml', 'championIdOf', 'skinIdOf', 'skinChampionOf', 'fullSplashOf',
     'ownedSkinsFor', 'upgrade', 'revealDrops', 'showReveal', 'openDetail', 'openDetailFromDrop', 'previewSkin',
-    'closeDetail', 'toggleVideo', 'setRerollMode',
+    'closeDetail', 'toggleVideo', 'setRerollMode', 'showChroma', 'loadChromas', 'pickSpotlight', 'findSpotlight', 'saveYoutubeKey',
   ]);
   const $ = env.pick;
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   await app.loadLoot();
   const S = app.state;
 
@@ -70,7 +70,7 @@ const t = suite('skiny');
   const n = app.ownedSkinsFor(app.skinChampionOf(shard)).length;
   const shardCard = app.cardHtml(shard, 'skins');
   t.ok(/data-detail="1"/.test(shardCard) && /data-pick="/.test(shardCard), 'skin shard: otevira detail, vyber na kolecku');
-  if (n) t.ok(new RegExp(`<b>${n}</b> (skin|skiny|skinu) na sampiona`).test(shardCard), `${shard.itemDesc}: "${n} ... na sampiona"`);
+  if (n) t.ok(new RegExp(`<b>${n}</b> skins? for this champion`).test(shardCard), `${shard.itemDesc}: "${n} ... na sampiona"`);
   t.ok(realChamps.every((i) => !/skins-chip|data-detail/.test(app.cardHtml(i, 'champs'))), `${realChamps.length} champion shardu: bez skinu a bez detailu`);
 
   t.section('klik');
@@ -104,30 +104,148 @@ const t = suite('skiny');
   const mySkins = app.ownedSkinsFor(ctx.championId);
   const gallery = $('#detail-skins').innerHTML;
   t.ok(mySkins.length
-    ? (gallery.match(/data-preview="/g) || []).length === mySkins.length && gallery.includes(`${ctx.championName}: tvoje skiny`)
-    : /zatim nemas zadny skin/.test(gallery),
+    ? (gallery.match(/data-preview="/g) || []).length === mySkins.length && gallery.includes(`${ctx.championName}: your skins`)
+    : /you don't own any skins yet/.test(gallery),
     mySkins.length ? `vsech ${mySkins.length} tvych skinu na ${ctx.championName}` : `${ctx.championName}: zatim zadny skin`);
   if (mySkins.length) {
     const other = mySkins[0];
     app.previewSkin(other.id);
     t.ok($('#detail-img').src === '/lcu' + other.splash && /uncentered/.test(other.splash), `nahled ${other.name}: jeho cely splash`);
-    t.ok(/Tvuj skin/.test($('#detail-caption').innerHTML), 'popisek "Tvuj skin"');
+    t.ok(/Your skin/.test($('#detail-caption').innerHTML), 'popisek "Your skin"');
     env.click({ '[data-detail-back]': {} });
     t.ok($('#detail-img').src === expected, 'zpet na shard');
   }
 
   t.section('detail - video prohlidka');
-  t.ok(/data-video/.test($('#detail-info').innerHTML) && /Video prohlidka/.test($('#detail-info').innerHTML), 'tlacitko Video prohlidka');
+  // YouTube se nikdy nestahuje. Bez klice obycejny odkaz, s klicem oficialni API.
+  const shardName = ctx.name;
+  const info0 = $('#detail-info').innerHTML;
+  t.ok(!/data-video/.test(info0) && /<a class="ghost-btn video-btn" href="https:\/\/www\.youtube\.com\/results\?search_query=SkinSpotlights/.test(info0)
+    && /target="_blank"/.test(info0), 'bez API klice: Video preview je odkaz na hledani (nova zalozka)');
+  await app.toggleVideo();
+  t.ok($('#detail-video').innerHTML === '', 'bez klice se nic nehleda ani nevklada');
+
+  const realFetch = global.fetch;
+  const ytCalls = [];
+  let ytReply = null;
+  global.fetch = (url, init) => {
+    if (String(url).startsWith('https://www.googleapis.com/')) { ytCalls.push(String(url)); return Promise.resolve(ytReply()); }
+    if (/^https?:/.test(String(url))) return Promise.reject(new Error('jiny externi dotaz: ' + url));
+    return realFetch(url, init);
+  };
+  const ytOk = (items) => ({ ok: true, status: 200, json: async () => ({ items }) });
+  const CH = 'UC0NwzCHb8Fg89eTB5eYX17Q';
+
+  app.saveYoutubeKey('TEST-KEY-123');
+  t.ok(/data-video/.test($('#detail-info').innerHTML) && /Video preview/.test($('#detail-info').innerHTML), 's klicem: tlacitko Video preview');
+  ytReply = () => ytOk([
+    { id: { videoId: 'pbePreview1' }, snippet: { channelId: CH, title: `${shardName} Skin Spotlight - Pre-Release - PBE Preview` } },
+    { id: { videoId: 'finalVideo1' }, snippet: { channelId: CH, title: `${shardName.replace(/'/g, '&#39;')} Skin Spotlight - League of Legends` } },
+  ]);
   await app.toggleVideo();
   const video = $('#detail-video').innerHTML;
-  const embedded = /youtube-nocookie\.com\/embed\/[\w-]{11}\?autoplay=1/.test(video);
-  t.ok(embedded || /Hledat na YouTube/.test(video), embedded ? 'video vlozene (youtube-nocookie, autoplay)' : 'video nenalezeno -> odkaz na hledani');
-  t.ok($('#detail-art').classList.contains('is-video') && /Zpet na splash/.test($('#detail-info').innerHTML), 'misto splashe video, tlacitko Zpet na splash');
+  const q = new URL(ytCalls[0] || 'http://x').searchParams;
+  t.ok(ytCalls.length === 1 && q.get('key') === 'TEST-KEY-123' && q.get('channelId') === CH && q.get('part') === 'snippet',
+    'hleda se pres YouTube Data API: klic hrace, kanal SkinSpotlights');
+  t.ok(/youtube-nocookie\.com\/embed\/finalVideo1\?autoplay=1/.test(video), 'vlozeno hotove video (ne PBE nahled), entity v nazvu nevadi');
+  t.ok($('#detail-art').classList.contains('is-video') && /Back to splash/.test($('#detail-info').innerHTML), 'misto splashe video, tlacitko Back to splash');
+  await app.toggleVideo();
+  await app.toggleVideo();
+  t.ok(ytCalls.length === 1, 'podruhe z cache - kvota se neplytva');
+  t.ok(JSON.parse(env.mem['lootforge.ytCache'] || '{}')[Object.keys(JSON.parse(env.mem['lootforge.ytCache'] || '{}'))[0]].videoId === 'finalVideo1', 'cache v localStorage (jen uspechy)');
+  await app.toggleVideo();
+
+  delete env.mem['lootforge.ytCache'];
+  ytReply = () => ({ ok: false, status: 403, json: async () => ({}) });
+  await app.toggleVideo();
+  t.ok(/rejected the API key/.test($('#detail-video').innerHTML) && /Search on YouTube/.test($('#detail-video').innerHTML), 'spatny klic / kvota: srozumitelna hlaska a odkaz');
+  await app.toggleVideo();
+  ytReply = () => ytOk([{ id: { videoId: 'cizikanal01' }, snippet: { channelId: 'UCkopie', title: `${shardName} Skin Spotlight` } }]);
+  await app.toggleVideo();
+  t.ok(/No SkinSpotlights video found/.test($('#detail-video').innerHTML) && !env.mem['lootforge.ytCache'], 'jiny kanal neprojde, neuspech se nepamatuje');
+  await app.toggleVideo();
+
+  t.section('vyber videa SkinSpotlights');
+  const v = (id, title, ch) => ({ id, title, channelId: ch || CH });
+  const list = [
+    v('pbe', 'Dawnbringer Janna Skin Spotlight - Pre-Release - PBE Preview - League of Legends'),
+    v('cmp', 'Dawnbringer Janna VS Bewitching Janna', 'UCjiny'),
+    v('cizi', 'Dawnbringer Janna Skin Spotlight', 'UCkopie'),
+    v('final', 'Dawnbringer Janna Skin Spotlight - League of Legends'),
+  ];
+  t.ok((app.pickSpotlight(list, 'Dawnbringer Janna') || {}).id === 'final', 'hotovy skin ma prednost pred PBE nahledem');
+  t.ok((app.pickSpotlight(list.slice(0, 3), 'Dawnbringer Janna') || {}).id === 'pbe', 'kdyz hotove video neni, vezme PBE');
+  t.ok(app.pickSpotlight([v('x', 'Coven Janna Skin Spotlight')], 'Dawnbringer Janna') === null, 'jiny skin neprojde');
+  t.ok((app.pickSpotlight([v('kda', 'K/DA ALL OUT Ahri Skin Spotlight - League of Legends')], 'K/DA ALL OUT Ahri') || {}).id === 'kda', 'lomitka a velka pismena nevadi');
+  t.ok((app.pickSpotlight([v('ks', "Star Guardian Kai'Sa Skin Spotlight")], "Star Guardian Kai'Sa") || {}).id === 'ks', 'apostrof nevadi');
+  t.ok(app.pickSpotlight(list, '') === null, 'prazdne jmeno = nic');
+
+  app.saveYoutubeKey('');
+  global.fetch = realFetch;
+  await app.toggleVideo();
+  t.ok(!$('#detail-art').classList.contains('is-video'), 'klic odebran: zpet k odkazu');
+  app.saveYoutubeKey('TEST-KEY-123');
+  ytReply = () => ytOk([]);
+  global.fetch = (url, init) => (String(url).startsWith('https://www.googleapis.com/') ? Promise.resolve(ytReply()) : realFetch(url, init));
+  await app.toggleVideo();
   await app.toggleVideo();
   t.ok($('#detail-video').innerHTML === '' && !$('#detail-art').classList.contains('is-video'), 'zpet: iframe pryc (prehravani se zastavi)');
   await app.toggleVideo();
   app.closeDetail();
   t.ok($('#detail-video').innerHTML === '', 'zavreni detailu video zastavi');
+
+  // po createEnv() fetch adresu serveru doplnuje sam - tady jen relativni cesty
+  t.section('chromy');
+  // skin s chromami, ktere hrac aspon zcasti vlastni - najit pres inventar klienta
+  const inventory = await (await fetch('/lcu/lol-inventory/v2/inventory/CHAMPION_SKIN')).json();
+  const invIds = new Set(inventory.map((i) => i.itemId));
+  const withChromas = Object.values(skinsJson)
+    .filter((sk) => Math.floor(sk.id / 1000) < 1000 && (sk.chromas || []).some((c) => invIds.has(c.id)))
+    .sort((a, b) => b.chromas.filter((c) => invIds.has(c.id)).length - a.chromas.filter((c) => invIds.has(c.id)).length)[0];
+
+  if (!withChromas) {
+    t.info('hrac nevlastni zadnou chromu - kontrola preskocena');
+  } else {
+    const champOfSkin = Math.floor(withChromas.id / 1000);
+    const lcuChromas = await (await fetch(`/lcu/lol-champions/v1/inventories/${me.summonerId}/champions/${champOfSkin}/skins/${withChromas.id}/chromas`)).json();
+    const lcuOwned = lcuChromas.filter((c) => c.ownership && c.ownership.owned).length;
+
+    const drop = { name: withChromas.name, img: '/lcu' + withChromas.tilePath, rarity: 'DEFAULT', count: 1,
+      type: 'SKIN', lootId: `CHAMPION_SKIN_${withChromas.id}`, splash: '/lcu' + withChromas.splashPath };
+    const cctx = await app.openDetailFromDrop(drop);
+    const html = $('#detail-chromas').innerHTML;
+    t.ok((html.match(/data-chroma="/g) || []).length === lcuChromas.length, `${withChromas.name}: vsech ${lcuChromas.length} chrom`);
+    t.ok(new RegExp(`<span>${lcuOwned} / ${lcuChromas.length}</span>`).test(html), `vlastnis ${lcuOwned} z ${lcuChromas.length} (sedi s klientem)`);
+    t.ok((html.match(/class="chroma is-owned/g) || []).length === lcuOwned && (html.match(/chroma-check/g) || []).length === lcuOwned, 'vlastnene maji fajfku');
+    t.ok(lcuOwned === lcuChromas.filter((c) => invIds.has(c.id)).length, 'vlastnictvi z endpointu sedi s inventarem');
+    t.ok(!/chroma-name">[^<]*\(/.test(html.replace(/<span class="swatch"[^>]*><\/span>/g, '')), 'jmena bez nazvu skinu ("Bronze", ne "Victorious TF (Bronze)")');
+    t.ok(cctx.chromas.every((c) => c.colors.every((x) => /^#[0-9a-f]{3,8}$/i.test(x))), 'barvy do stylu jen jako hex');
+
+    const firstOwned = cctx.chromas.find((c) => c.owned);
+    app.showChroma(firstOwned.id);
+    t.ok($('#detail-art').classList.contains('is-chroma') && $('#detail-chroma').innerHTML.includes(firstOwned.img) && /OWNED/.test($('#detail-chroma').innerHTML),
+      `klik na ${firstOwned.name}: model nad ztlumenym splashem, OWNED`);
+    app.showChroma(firstOwned.id);
+    t.ok(!$('#detail-art').classList.contains('is-chroma') && $('#detail-chroma').innerHTML === '', 'druhy klik nahled zavre');
+
+    app.showChroma(firstOwned.id);
+    await app.toggleVideo();
+    t.ok(!$('#detail-art').classList.contains('is-chroma'), 'video a nahled chromy se vylucuji');
+    await app.toggleVideo();
+    app.saveYoutubeKey('');
+    global.fetch = realFetch;
+
+    // nahled jineho vlastniho skinu = jeho chromy
+    const otherOwned = app.ownedSkinsFor(champOfSkin).find((sk) => sk.id !== withChromas.id);
+    if (otherOwned) {
+      await app.previewSkin(otherOwned.id);
+      const other = await (await fetch(`/lcu/lol-champions/v1/inventories/${me.summonerId}/champions/${champOfSkin}/skins/${otherOwned.id}/chromas`)).json();
+      const n2 = ($('#detail-chromas').innerHTML.match(/data-chroma="/g) || []).length;
+      t.ok(cctx.chromaSkin === otherOwned.id && n2 === other.length, `nahled ${otherOwned.name}: jeho chromy (${other.length})`);
+    }
+    app.closeDetail();
+    t.ok($('#detail-chroma').innerHTML === '', 'zavreni detailu nahled chromy uklidi');
+  }
 
   t.section('odhaleni');
   const [richId, richList] = Object.entries(data.byChampion).sort((a, b) => b[1].length - a[1].length)[0];

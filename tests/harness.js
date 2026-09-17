@@ -18,7 +18,7 @@ const path = require('path');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const ROOT = path.join(__dirname, '..');
-const BASE = process.env.GAMBA_URL || 'http://127.0.0.1:4545';
+const BASE = process.env.LOOTFORGE_URL || process.env.GAMBA_URL || 'http://127.0.0.1:4545';
 
 const EXIT = { OK: 0, FAIL: 1, SKIP: 3 };
 
@@ -27,7 +27,11 @@ function createEnv(options = {}) {
     log: [],            // zmeny trid: '+trida' / '-trida'
     posts: [],          // zablokovane pokusy o POST (url)
     postBodies: [],     // ... a jejich tela, at jde overit, co by se poslalo
-    mem: { 'gamba.mute': options.sound ? '0' : '1' },
+    mem: {
+      'lootforge.mute': options.sound ? '0' : '1',
+      'lootforge.welcome': '1',                           // uvodni upozorneni by blokovalo klavesy
+      'lootforge.testItems': options.testItems === false ? '0' : '1',   // testy s nimi pocitaji
+    },
     sound: { osc: 0, noise: 0 },
     keyHandlers: [],
     clickHandlers: [],

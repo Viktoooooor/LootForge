@@ -28,7 +28,7 @@ const { clientStatus, EXIT } = require('./harness');
   }
 
   const status = await clientStatus();
-  console.log('Hextech Gamba - testy');
+  console.log('LootForge - testy');
   console.log(`server: ${status.server ? 'bezi' : 'NEBEZI'} | klient: ${status.client ? 'pripojen' : 'nepripojen'}`);
   if (!status.client) {
     console.log('(testy, ktere potrebuji klienta, se preskoci - spust League a `node server.js`)');

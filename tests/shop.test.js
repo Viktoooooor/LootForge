@@ -44,7 +44,7 @@ const t = suite('shop');
   const app = env.load(['reel.js', 'simulator.js', 'app.js'],
     ['state', 'loadLoot', 'loadShop', 'renderShop', 'shopEntries', 'buyOffer', 'purchase', 'countOf']);
   const $ = env.pick;
-  env.mem['gamba.fast'] = '1';
+  env.mem['lootforge.fast'] = '1';
   await app.loadLoot();
   await app.loadShop();
   const S = app.state;
@@ -52,8 +52,8 @@ const t = suite('shop');
   t.ok(S.shop.stores.length === shop.stores.length + 1, 'nabidky z klienta + testovaci nabidka');
   const html = $('#grid-shop').innerHTML;
   t.ok((html.match(/class="card shop-card/g) || []).length === entries.length + 1, 'karta pro kazdou nabidku');
-  t.ok(/Testovaci nabidka \(simulace\)/.test(html) && /SIMULACE/.test(html), 'testovaci nabidka je zretelne oznacena');
-  t.ok(/mythic esence/.test($('#shop-balance').innerHTML), 'zustatek esence v hlavicce obchodu');
+  t.ok(/Test offer \(simulated\)/.test(html) && /SIMULATED/.test(html), 'testovaci nabidka je zretelne oznacena');
+  t.ok(/Mythic Essence/.test($('#shop-balance').innerHTML), 'zustatek esence v hlavicce obchodu');
 
   // umele stavy: vlastnene a nedostatek esence
   const me = app.countOf('CURRENCY_mythic');
@@ -64,9 +64,9 @@ const t = suite('shop');
   S.shop.stores = [fakeStore].concat(S.shop.stores);
   app.renderShop();
   const html2 = $('#grid-shop').innerHTML;
-  t.ok(/is-owned[\s\S]*?VLASTNIS[\s\S]*?<button disabled>Uz vlastnis<\/button>/.test(html2), 'vlastnena nabidka: paska VLASTNIS a nejde koupit');
-  t.ok(new RegExp(`<button disabled>Chybi 50 esence</button>`).test(html2), 'nedostatek esence: rekne kolik chybi');
-  t.ok(/konci za 1 d/.test(html2), 'odpocet konce rotace');
+  t.ok(/is-owned[\s\S]*?OWNED[\s\S]*?<button disabled>Owned<\/button>/.test(html2), 'vlastnena nabidka: paska OWNED a nejde koupit');
+  t.ok(new RegExp(`<button disabled>Need 50 more</button>`).test(html2), 'nedostatek esence: rekne kolik chybi');
+  t.ok(/ends in 1 d/.test(html2), 'odpocet konce rotace');
 
   t.section('nakup - testovaci nabidka');
   await app.buyOffer('TEST_OFFER');

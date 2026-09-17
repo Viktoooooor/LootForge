@@ -82,8 +82,8 @@ const t = suite('recepty');
   const ownedShards = shards.filter((i) => /_RENTAL$/.test(i.type) && app.alreadyOwned(i));
   const newShards = shards.filter((i) => /_RENTAL$/.test(i.type) && !app.alreadyOwned(i));
   const perms = shards.filter((i) => !/_RENTAL$/.test(i.type));
-  t.ok(ownedShards.every((i) => /is-owned/.test(app.cardHtml(i, app.bucket(i))) && /VLASTNIS/.test(app.cardHtml(i, app.bucket(i)))),
-    `${ownedShards.length} shardu vlastnenych veci ma zelenou pasku VLASTNIS`);
+  t.ok(ownedShards.every((i) => /is-owned/.test(app.cardHtml(i, app.bucket(i))) && /OWNED/.test(app.cardHtml(i, app.bucket(i)))),
+    `${ownedShards.length} shardu vlastnenych veci ma zelenou pasku OWNED`);
   t.ok(newShards.every((i) => !/owned-ribbon/.test(app.cardHtml(i, app.bucket(i)))), `${newShards.length} nevlastnenych je bez pasky`);
   t.ok(perms.every((i) => !/owned-ribbon/.test(app.cardHtml(i, app.bucket(i)))), 'permanenty pasku nemaji (vlastnis je samozrejme)');
   t.ok(shards.every((i) => !/MAS HO/.test(app.cardHtml(i, app.bucket(i)))), 'stary text "MAS HO" je pryc');

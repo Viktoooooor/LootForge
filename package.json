@@ -1,0 +1,20 @@
+{
+  "name": "lootforge",
+  "version": "1.0.0",
+  "description": "Open League of Legends chests in bulk with cinematic reveals, clean up your loot and browse your collection. Runs locally next to the League client.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR-GITHUB-NAME/LootForge"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run.js",
+    "build": "node scripts/build-exe.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
