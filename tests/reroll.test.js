@@ -1,9 +1,9 @@
 'use strict';
 
 /*
- * Rezim rerollu na skutecnem inventari: zasobnik, pojistky vyberu, navrh
- * a reroll testovacich shardu. Animaci samotnou testuje animace.test.js.
- * Potrebuje server a klienta.
+ * Reroll mode on the real inventory: the tray, the safeguards on the selection,
+ * the suggestion and a reroll of test shards. The animation itself is covered by
+ * animace.test.js. Needs the server and the client.
  */
 
 const { createEnv, clientStatus, suite } = require('./harness');
@@ -51,7 +51,7 @@ const t = suite('reroll');
   app.toggleSelect(tests[0].lootId);
   t.ok(!S.selected.has(tests[0].lootId), 'testovaci k ostrym neprojde');
 
-  // i kdyby se vyber nejak dostal na ctyri, reroll nesmi vzit libovolne tri
+  // even if the selection somehow got to four, the reroll must not take any three
   S.selected = new Set(real.slice(0, 4).map((i) => i.lootId));
   await app.rerollSelected();
   t.ok(env.posts.length === 0 && /exactly 3/.test($('#toast').textContent), `4 vybrane -> odmitnuto: "${$('#toast').textContent}"`);

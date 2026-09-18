@@ -1,11 +1,11 @@
 'use strict';
 
 /*
- * Pripravenost na verejne vydani. Staticke kontroly bezi vzdycky, zbytek jen
- * s klientem:
- *  - zadny stary nazev a zadna cestina v UI, disclaimer Riotu, licence, verze
- *  - server nestahuje YouTube a jiny externi dotaz nez YouTube Data API neni
- *  - testovaci polozky jsou ve vychozim stavu vypnute, uvodni upozorneni se ukaze
+ * Readiness for a public release. The static checks always run, the rest only
+ * with a client:
+ *  - no old name and no Czech in the UI, the Riot disclaimer, the licence, the version
+ *  - the server does not scrape YouTube and makes no external request besides the APIs
+ *  - test items are off by default and the first-start notice shows up
  */
 
 const fs = require('fs');
@@ -21,7 +21,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   const app = read('public/app.js');
   const pkg = JSON.parse(read('package.json'));
   const ui = html + app + read('public/reel.js') + read('public/simulator.js') + read('server.js');
-  // komentare pryc - v nich cestina zustava
+  // comments out - they are allowed to stay in Czech
   const code = ui.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/).map((l) => l.replace(/(^|\s)\/\/ .*$/, '')).join('\n');
 
   t.ok(!/gamba/i.test(code.replace(/lootforge|'gamba\.' \+ k/gi, '')), 'stary nazev "Gamba" nikde v UI (krome prevodu ulozenych dat)');

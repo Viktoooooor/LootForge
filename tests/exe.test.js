@@ -1,9 +1,9 @@
 'use strict';
 
 /*
- * LootForge.exe (npm run build). Spusti postavene exe na vlastnim portu a
- * overi, ze bezi samo - bez Node a bez slozky public vedle sebe.
- * Bez dist/LootForge.exe se preskoci. Klienta nepotrebuje.
+ * LootForge.exe (npm run build). Starts the built exe on its own port and
+ * checks that it runs on its own - without Node and without a public/ folder
+ * next to it. Skipped without dist/LootForge.exe. The client is not needed.
  */
 
 const fs = require('fs');
@@ -26,7 +26,7 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
   const pe = head.readUInt32LE(0x3c);
   t.ok(head.readUInt16LE(pe + 24 + 68) === 2, 'exe je okenni aplikace (subsystem GUI), konzole se neotevre');
 
-  // kratka doba necinnosti, at jde overit samo-ukonceni
+  // a short idle timeout, so the self-quit can be checked
   const proc = spawn(EXE, [], {
     env: { ...process.env, PORT: String(PORT), OPEN_BROWSER: '0', LOOTFORGE_IDLE_EXIT_MS: '1500' },
     stdio: 'ignore', windowsHide: true,
@@ -71,7 +71,7 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
     const post = await fetch(URL_BASE + '/lcu/lol-loot/v1/lootforge-test-neexistuje', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '[]' });
     t.ok(post.status === 403, `zapis bez Origin odmitnut i v exe: ${post.status}`);
 
-    // u starsiho exe by chybely i veci pridane po buildu - kontrolovat jen aktualni
+    // an older exe would also be missing things added after the build - only check a current one
     const licence = await fetch(URL_BASE + '/LICENSE');
     const hasLicence = licence.ok && /MIT License/.test(await licence.text());
     if (stale.length) t.info(`licence v exe: ${hasLicence ? 'ano' : 'ne'} (exe je starsi nez zdrojaky)`);
@@ -82,7 +82,7 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
     const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
     t.ok(new RegExp(`LOOTFORGE v${pkg.version.replace(/\./g, '\\.')}`).test(log), `vypisy jdou do logu (${logFile})`);
 
-    // "zalozka" = SSE spojeni. Dokud je otevrena, exe bezi.
+    // a "tab" = an SSE connection. While one is open, the exe keeps running.
     const sse = await new Promise((resolve, reject) => {
       const req = http.get(URL_BASE + '/api/events', { headers: { Host: `127.0.0.1:${PORT}` } }, resolve);
       req.on('error', reject);

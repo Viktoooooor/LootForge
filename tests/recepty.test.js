@@ -1,9 +1,10 @@
 'use strict';
 
 /*
- * Recepty a kategorizace na SKUTECNEM inventari. Potrebuje server a klienta.
- * Bedny a fragmenty hrac mit nemusi - pridame je jen do pameti appky a overime
- * telo POST requestu, ktery by se poslal. Nic se neodesle.
+ * Recipes and categorisation on the REAL inventory. Needs the server and the
+ * client. The player need not have chests or fragments - they are added to the
+ * app's memory only, and the body of the POST that would be sent is checked.
+ * Nothing is ever sent.
  */
 
 const { createEnv, clientStatus, suite } = require('./harness');

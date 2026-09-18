@@ -1,8 +1,9 @@
 'use strict';
 
 /*
- * Ovladani a obal odhaleni: brana pri otevreni a zavreni, zamek rolovani,
- * klavesy a vyber rezimu animace podle poctu odmen. Klient neni potreba.
+ * Controls and the shell around the reveal: the gate opening and closing, the
+ * scroll lock, the keys and which animation is picked for how much dropped.
+ * The client is not needed.
  */
 
 const { createEnv, suite, sleep } = require('./harness');
@@ -60,7 +61,7 @@ const drop = (name, rarity) => ({ name, img: `/lcu/${name}.jpg`, rarity: rarity 
   $('#modal').hidden = true;
 
   t.section('rezim odhaleni podle poctu odmen');
-  // ktera animace se zavolala - u vice veci ji pak nahradi souhrn
+  // which animation ran - with several items a summary replaces it afterwards
   let called = '';
   for (const fn of ['play', 'playMulti', 'cascade', 'unlock', 'reroll']) {
     const real = Reel[fn];
@@ -83,13 +84,13 @@ const drop = (name, rarity) => ({ name, img: `/lcu/${name}.jpg`, rarity: rarity 
   }
 
   t.section('souhrn');
-  // jedna vec: zadny souhrn, jen cedule
+  // one item: no summary, just the banner
   app.showReveal('jedna');
   await app.revealDrops([drop('Samotna', 'EPIC')], 'jedna', { reel: true });
   let html = $('#reveal-cards').innerHTML + $('#reveal-cards').children.map((c) => c.innerHTML).join('');
   t.ok(!/class="summary"/.test(html) && /reel-win-name/.test(html), 'jedna vec = cedule, bez souhrnu');
 
-  // vic veci: souhrn se sloucenim, soucty a poradim
+  // several items: a summary with merging, totals and ordering
   const mixed = [
     { name: 'Orange Essence', img: '/lcu/oe.png', icon: true, rarity: 'DEFAULT', count: 270, type: 'CURRENCY' },
     { name: 'Star Guardian Kaisa', img: '/lcu/k.jpg', rarity: 'LEGENDARY', count: 1, type: 'SKIN_RENTAL' },

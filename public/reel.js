@@ -1,41 +1,42 @@
-/* LootForge - animace odmen pres celou obrazovku.
+/* LootForge - the full-screen reward animations.
  *
- * Podle toho, kolik toho padne, se pouzije jiny rezim:
- *   play()     1 vec     - jedna velka ruleta pres celou sirku
- *   playMulti()2-5 veci  - tolik pasu nad sebou, kazdy dojede o chvili pozdeji
- *   cascade()  6+ veci   - mrizka rubem nahoru, karty se postupne otaceji
- *   unlock()   odemknuti - obrad, nic se netoci (vysledek je predem jasny)
+ * The mode depends on how much dropped:
+ *   play()     1 item     - one big roulette across the full width
+ *   playMulti()2-5 items  - that many reels, each landing a moment later
+ *   cascade()  6+ items   - a grid face down, cards turning one by one
+ *   unlock()   unlocking  - a ceremony, nothing spins (the result is known)
  *
- * Animace zene requestAnimationFrame (ne CSS transition), protoze jen tak vim
- * v kazdem snimku, jak rychle pas jede - a podle toho ridim rozmazani i zvuk.
- * Rozmery dlazdic pocita JS a predava je do CSS pres --tw/--th, takze se to
- * prizpusobi obrazovce a nemuze se to s CSS rozejit.
+ * requestAnimationFrame drives the animation (not CSS transitions), because
+ * only then do I know in every frame how fast the reel is going - and the blur
+ * and the sound follow from that. JS computes the tile sizes and hands them to
+ * CSS through --tw/--th, so it adapts to the screen and cannot drift apart
+ * from the stylesheet.
  *
- * Zvuk se cely syntetizuje WebAudiem, zadne mp3 se nikam netahaji.
+ * All sound is synthesized with WebAudio; no mp3 is ever downloaded.
  */
 
 'use strict';
 
-// Appka se driv jmenovala "Hextech Gamba" a ukladala pod "gamba.*". Nastaveni
-// a statistiky se jednou prenesou, at o ne nikdo neprijde. reel.js se nacita
-// jako prvni, takze to probehne driv, nez cokoliv z localStorage cte.
+// The app used to be called "Hextech Gamba" and saved under "gamba.*". Settings
+// and statistics are migrated once so nobody loses them. reel.js loads first,
+// so this runs before anything reads localStorage.
 (function migrateStorage() {
   try {
     for (const k of ['mute', 'fast', 'history', 'stats', 'cleanup']) {
       const old = localStorage.getItem('gamba.' + k);
       if (old !== null && localStorage.getItem('lootforge.' + k) === null) localStorage.setItem('lootforge.' + k, old);
     }
-  } catch (_) { /* bez localStorage neni co prenaset */ }
+  } catch (_) { /* without localStorage there is nothing to migrate */ }
 })();
 
 globalThis.Reel = (function () {
 
   const TILES = 58;
-  const WIN_AT = 50;           // na kolikate dlazdici pas zastavi
-  const CHARGE = 750;          // ms nabijeni pred startem
-  const SPIN_BASE = 4300;      // ms jizdy prvniho pasu
-  const SPIN_STEP = 430;       // o kolik dojede kazdy dalsi pas pozdeji
-  const CLOSING_FROM = 0.82;   // odkud se pas barvi do rarity vyhry
+  const WIN_AT = 50;           // which tile the reel stops on
+  const CHARGE = 750;          // ms of charging before the start
+  const SPIN_BASE = 4300;      // ms of travel for the first reel
+  const SPIN_STEP = 430;       // how much later each following reel lands
+  const CLOSING_FROM = 0.82;   // from where the reel takes on the winner's rarity colour
   const MAX_ROWS = 5;
 
   const RARITY_LABEL = {
@@ -47,8 +48,8 @@ globalThis.Reel = (function () {
   let skipRequested = false;
 
   /**
-   * Rychly rezim. Sest vterin na bednu je paradni jednou, ne po padesate.
-   * Dokud si uzivatel nevybere sam, rozhoduje systemove nastaveni omezeni pohybu.
+   * Fast mode. Six seconds per chest is great once, not for the fiftieth time.
+   * Until the user picks for themselves, the system's reduce-motion setting decides.
    */
   const Motion = {
     get reduced() {
@@ -60,7 +61,7 @@ globalThis.Reel = (function () {
       return v === null ? this.reduced : v === '1';
     },
     set fast(v) { localStorage.setItem('lootforge.fast', v ? '1' : '0'); },
-    /** Zkrati casovani, kdyz je zapnuty rychly rezim. */
+    /** Shortens the timing when fast mode is on. */
     t(ms) { return this.fast ? Math.max(60, Math.round(ms * 0.26)) : ms; },
   };
 
@@ -68,7 +69,7 @@ globalThis.Reel = (function () {
   const rank = (r) => Math.max(0, RARITY_RANK.indexOf(r || 'DEFAULT'));
   const rarityVar = (r) => `var(--r-${String(r || 'DEFAULT').toLowerCase()}, var(--r-default))`;
 
-  /** Cekani, ktere jde kdykoliv utnout tlacitkem "Preskocit animaci". */
+  /** A wait that the "Skip animation" button can cut short at any moment. */
   function wait(ms) {
     return new Promise((resolve) => {
       if (skipRequested || ms <= 0) return resolve();
@@ -76,7 +77,7 @@ globalThis.Reel = (function () {
       (function step() {
         const left = ms - (performance.now() - t0);
         if (skipRequested || left <= 0) return resolve();
-        // po 40 ms kvuli skipu, ale kratka cekani nenatahovat na celych 40
+        // polled every 40 ms for the skip, but short waits must not stretch to 40
         setTimeout(step, Math.min(40, left));
       })();
     });
@@ -92,7 +93,7 @@ globalThis.Reel = (function () {
   });
 
   // ======================================================================
-  //  ZVUK
+  //  SOUND
   // ======================================================================
 
   const Sfx = {
@@ -101,7 +102,7 @@ globalThis.Reel = (function () {
     get enabled() { return localStorage.getItem('lootforge.mute') !== '1'; },
     set enabled(v) { localStorage.setItem('lootforge.mute', v ? '0' : '1'); },
 
-    /** AudioContext smi vzniknout az po kliknuti - sem se vzdy dostaneme z nej. */
+    /** An AudioContext may only be created after a click - we always get here from one. */
     wake() {
       if (!this.enabled) return null;
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -116,7 +117,7 @@ globalThis.Reel = (function () {
       return this.ctx;
     },
 
-    /** Sumovy buffer se vyrabi jednou - tiku je za jizdu pres ctyricet. */
+    /** The noise buffer is built once - there are over forty ticks per run. */
     noiseBuffer(ctx) {
       if (!this._noise) {
         const len = Math.floor(ctx.sampleRate * 0.8);
@@ -164,7 +165,7 @@ globalThis.Reel = (function () {
       src.stop(t + dur + 0.02);
     },
 
-    /** Tik pod zamerovacem. `slow` 0 = pas leti, 1 = uz sotva leze. */
+    /** A tick under the marker. `slow` 0 = the reel flies, 1 = it barely crawls. */
     clack(slow) {
       this.noise(0.028 + 0.055 * slow, 0.045 + 0.13 * slow, 'bandpass', 2700 - 1500 * slow);
       if (slow > 0.5) this.tone(170 - 55 * slow, 0.1, 0.05 * slow, 'triangle');
@@ -177,7 +178,7 @@ globalThis.Reel = (function () {
       this.noise(sec, 0.045, 'highpass', 260, 2000);
     },
 
-    /** Dunivy podklad behem jizdy; hlasitost ridi rychlost pasu. */
+    /** The rumble under the run; the reel's speed drives its volume. */
     rumble() {
       const ctx = this.wake();
       if (!ctx) return null;
@@ -202,7 +203,7 @@ globalThis.Reel = (function () {
       };
     },
 
-    /** Dopad na vyhru. `weight` ztlumi rady, ktere nejsou ta hlavni. */
+    /** The landing on the winner. `weight` quiets the rows that are not the main one. */
     land(rarity, weight) {
       const w = weight == null ? 1 : weight;
       const chords = {
@@ -231,8 +232,8 @@ globalThis.Reel = (function () {
       }
     },
 
-    /** Otoceni karty v kaskade - cim vzacnejsi, tim vys a dyl. */
-    /** Odhaleni, co se skryva za raritou: trpytivy prejezd, u vzacnych vys a plnejsi. */
+    /** A card turning in the cascade - the rarer, the higher and longer. */
+    /** Revealing what hides behind the rarity: a shimmer, higher and fuller for rare items. */
     unveil(rarityRank) {
       const r = rarityRank || 0;
       this.noise(0.4, 0.05 + r * 0.015, 'highpass', 2400, 9500);
@@ -245,7 +246,7 @@ globalThis.Reel = (function () {
       this.tone(240 + rarityRank * 90, 0.14, 0.05, 'triangle');
     },
 
-    /** Otevreni a zavreni brany kolem celeho odhaleni. */
+    /** The gate around the whole reveal opening and closing. */
     gateOpen() {
       this.tone(130, 0.55, 0.13, 'sine', 62);
       this.noise(0.55, 0.12, 'highpass', 200, 2800);
@@ -266,14 +267,14 @@ globalThis.Reel = (function () {
 
     // --- reroll ---
 
-    /** Polozeni shardu na oltar - kazdy o kus vys. */
+    /** Placing a shard on the altar - each one a little higher. */
     rrPlace(i) {
       this.tone(92 - i * 9, 0.4, 0.17, 'sine', 52);
       this.noise(0.14, 0.09, 'bandpass', 900 + i * 280);
       this.tone(330 * Math.pow(1.26, i), 0.6, 0.045, 'triangle', null, 0.04);
     },
 
-    /** Vir: dva rozladene pily a sum, vsechno stoupa a zrychluje. */
+    /** The vortex: two detuned saws and noise, all rising and speeding up. */
     rrVortex(sec) {
       this.tone(52, sec, 0.12, 'sawtooth', 470);
       this.tone(55, sec, 0.07, 'sawtooth', 495);
@@ -283,14 +284,14 @@ globalThis.Reel = (function () {
       }
     },
 
-    /** Zhrouceni do jadra. */
+    /** The collapse into the core. */
     rrImplode() {
       this.tone(40, 1.7, 0.36, 'sine', 23);
       this.noise(0.95, 0.25, 'lowpass', 4200, 110);
       this.noise(0.22, 0.12, 'highpass', 2200, 9500);
     },
 
-    /** Mihnuti skinu v portalu; `p` 0..1 = jak daleko jsme. */
+    /** A skin flashing by in the portal; `p` 0..1 = how far along we are. */
     rrFlick(p) {
       this.noise(0.03 + 0.05 * p, 0.05 + 0.1 * p, 'bandpass', 3300 - 1900 * p);
       this.tone(420 + 820 * p, 0.06 + 0.09 * p, 0.028 + 0.045 * p, 'triangle');
@@ -311,7 +312,7 @@ globalThis.Reel = (function () {
   };
 
   // ======================================================================
-  //  SPOLECNE KOUSKY
+  //  SHARED PIECES
   // ======================================================================
 
   function makeEl(cls, html) {
@@ -321,7 +322,7 @@ globalThis.Reel = (function () {
     return e;
   }
 
-  /** Rozsype strepy ze stredu prvku. */
+  /** Scatters shards out of the element's centre. */
   function shards(host, rarity, count, spread) {
     const wrap = makeEl(`fx-shards rare-${rarity}`);
     for (let i = 0; i < count; i++) {
@@ -343,9 +344,9 @@ globalThis.Reel = (function () {
   const GEM = (r) => `/lcu/lol-game-data/assets/v1/rarity-gem-icons/${String(r).toLowerCase()}.png`;
 
   /**
-   * Strana karty, ktera ukazuje jen raritu - drahokam z klienta a barvu.
-   * Co to je, se hrac dozvi az pri odhaleni. Bezne veci drahokam nemaji
-   * (stejne jako v LoLku), dostanou jen sedy hextech kosoctverec.
+   * The side of a card that shows the rarity only - the client's gem and the
+   * colour. What the item actually is comes at the reveal. Common things have no
+   * gem (just like in the client), they get a grey hextech diamond.
    */
   function rarityFaceHtml(rarity) {
     const r = rarity || 'DEFAULT';
@@ -359,8 +360,8 @@ globalThis.Reel = (function () {
   }
 
   /**
-   * Dlazdice pasu. Vypln ukazuje jen raritu. Vyherni dlazdice ma pod raritou
-   * schovany i samotny predmet, ktery se odkryje az po dojezdu.
+   * A reel tile. Filler shows the rarity only. The winning tile also hides the
+   * item itself underneath, uncovered once the reel lands.
    */
   function tileHtml(drop, isWinner) {
     const r = esc(drop.rarity || 'DEFAULT');
@@ -375,9 +376,9 @@ globalThis.Reel = (function () {
   }
 
   /**
-   * Posklada pas: nahodna vypln, na WIN_AT pozici vyhra.
-   * Vypln se losuje, ne bere po poradku - jinak by kazdy pas vypadal stejne
-   * a pri peti bednach naraz to bylo videt na prvni pohled.
+   * Builds the reel: random filler with the winner at the WIN_AT position.
+   * The filler is drawn at random rather than in order - otherwise every reel
+   * would look the same, which is obvious when five chests open at once.
    */
   function buildStrip(winner, filler) {
     const tiles = [];
@@ -387,7 +388,7 @@ globalThis.Reel = (function () {
       if (i === WIN_AT) { tiles.push(tileHtml(winner, true)); continue; }
 
       let idx = Math.floor(Math.random() * filler.length);
-      // dva stejne obrazky vedle sebe vypadaji jako chyba vykreslovani
+      // two identical images side by side look like a rendering glitch
       if (filler.length > 1 && idx === last) idx = (idx + 1) % filler.length;
       last = idx;
 
@@ -397,16 +398,16 @@ globalThis.Reel = (function () {
   }
 
   /**
-   * Rozmery dlazdic podle poctu rad a velikosti okna. JS je jediny zdroj
-   * pravdy - CSS si je bere z --tw/--th, takze se to nemuze rozejit.
+   * Tile sizes from the number of rows and the window. JS is the single source
+   * of truth - CSS takes them from --tw/--th, so they cannot drift apart.
    */
   function geometry(rows) {
     const vp = viewport();
 
-    // Kolem pasu musi zbyt misto na titulek, ceduli s vyhrou a tlacitka.
-    // Bez teto rezervy pet pasu prelezlo a odhaleni zacalo rolovat.
-    const strop = Math.min(vp.h * 0.9, 900);        // .reveal-inner ma max-height: 90vh
-    const chrome = Math.min(260, strop * 0.34);     // na malem okne se rezerva sama zmensi
+    // Room has to be left around the reels for the title, the banner and the buttons.
+    // Without this reserve five reels overflowed and the reveal started to scroll.
+    const strop = Math.min(vp.h * 0.9, 900);        // .reveal-inner has max-height: 90vh
+    const chrome = Math.min(260, strop * 0.34);     // on a small window the reserve shrinks with it
     const avail = Math.max(180, strop - chrome);
 
     const rowH = clamp(Math.floor(avail / rows) - 14, 64, rows === 1 ? 200 : 150);
@@ -416,7 +417,7 @@ globalThis.Reel = (function () {
   }
 
   // ======================================================================
-  //  RULETA (1 az 5 pasu naraz)
+  //  ROULETTE (1 to 5 reels at once)
   // ======================================================================
 
   function spin(rowDefs, host) {
@@ -428,7 +429,7 @@ globalThis.Reel = (function () {
     const best = rows.reduce((b, r) => (rank(r.winner.rarity) > rank(b.winner.rarity) ? r : b), rows[0]);
 
     const stage = makeEl('reel-stage');
-    // zlata, dokud nic nedojede - jinak by zare prozradila nejlepsi drop hned na startu
+    // gold until something lands - otherwise the glow would give away the best drop at the start
     stage.style.setProperty('--win', 'var(--gold)');
     stage.appendChild(makeEl('cine-glow'));
 
@@ -459,11 +460,11 @@ globalThis.Reel = (function () {
     host.innerHTML = '';
     host.appendChild(stage);
 
-    // kam ma ktery pas dojet
+    // where each reel should land
     const jitterMax = geo.stride * 0.5;
     built.forEach((b, i) => {
-      // sirka bereme z realneho prvku, ne z window.innerWidth - to pocita
-      // i se svislym posuvnikem a vyhra by dosedla mimo zamerovac
+      // the width comes from the real element, not window.innerWidth - that counts
+      // the scrollbar too and the winner would land next to the marker
       const w = b.windowEl.clientWidth || vp.w;
       b.end = -(WIN_AT * geo.stride + geo.stride / 2 - w / 2 + (Math.random() - 0.5) * jitterMax);
       b.duration = Motion.t(SPIN_BASE) + i * Motion.t(SPIN_STEP);
@@ -473,13 +474,13 @@ globalThis.Reel = (function () {
     const lastIndex = built.length - 1;
 
     return (async () => {
-      // --- 1) nadech ---
+      // --- 1) the breath in ---
       built.forEach((b) => b.windowEl.classList.add('is-charging'));
       Sfx.chargeUp(Motion.t(CHARGE) / 1000);
       await wait(Motion.t(CHARGE));
       built.forEach((b) => b.windowEl.classList.remove('is-charging'));
 
-      // --- 2) jizda ---
+      // --- 2) the run ---
       if (!skipRequested) Sfx.whoosh();
       const rum = Sfx.rumble();
       built.forEach((b) => b.windowEl.classList.add('is-spinning'));
@@ -499,7 +500,7 @@ globalThis.Reel = (function () {
           if (win) win.classList.add('landed');
           b.windowEl.classList.add('is-done');
           shards(b.windowEl, b.def.winner.rarity || 'DEFAULT', built.length > 1 ? 16 : 28, built.length > 1 ? 110 : 190);
-          // hlavni rana patri posledni rade, ostatni jen cvaknou
+          // the main hit belongs to the last row, the others only click
           Sfx.land(b.def.winner.rarity || 'DEFAULT', i === lastIndex ? 1 : 0.45);
           if (i === lastIndex || rank(b.def.winner.rarity) >= 3) {
             stage.classList.add('is-hit');
@@ -520,13 +521,13 @@ globalThis.Reel = (function () {
           built.forEach((b, i) => {
             if (b.landed) return;
             const t = clamp(elapsed / b.duration, 0, 1);
-            const eased = 1 - Math.pow(1 - t, 4.2);   // rychly start, dlouhy dojezd
+            const eased = 1 - Math.pow(1 - t, 4.2);   // a quick start and a long landing
             const x = b.end * eased;
 
             b.strip.style.transform = `translateX(${x}px)`;
 
             if (i === lastIndex) {
-              // rozmazani a zvuk ridi posledni pas - tika az do uplneho konce
+              // the last reel drives the blur and the sound - it ticks right to the end
               const pxPerMs = Math.abs(x - lastX) / 16.7;
               lastX = x;
               if (rum) rum.set(clamp(pxPerMs / 90, 0, 1) * 0.16);
@@ -554,7 +555,7 @@ globalThis.Reel = (function () {
         requestAnimationFrame(frame);
       });
 
-      // --- 4) odhaleni: rarita uz je videt, ted teprve co to je ---
+      // --- 4) the reveal: the rarity is known, now comes what it actually is ---
       await wait(skipRequested ? 0 : Motion.t(built.length > 1 ? 380 : 650));
       stage.style.setProperty('--win', rarityVar(best.winner.rarity));
       for (let i = 0; i < built.length; i++) {
@@ -572,12 +573,12 @@ globalThis.Reel = (function () {
   const playMulti = (winners, filler, host) => spin(winners.map((w) => ({ winner: w, filler })), host);
 
   // ======================================================================
-  //  KASKADA (hodne veci naraz)
+  //  CASCADE (many things at once)
   // ======================================================================
 
   /**
-   * Na ruletu je toho moc, tak se vsechno rozlozi rubem nahoru a karty se
-   * postupne otaceji. Vzacne se otoci pomaleji a s ranou, at je poznat.
+   * Too much for a roulette, so everything is laid out face down and the cards
+   * turn one by one. Rare ones turn slower and with a hit, so they stand out.
    */
   function cascade(drops, host) {
     skipRequested = false;
@@ -610,13 +611,13 @@ globalThis.Reel = (function () {
     host.appendChild(stage);
 
     return (async () => {
-      // hodne karet = svizneji, at to neni na dlouhe lokty
+      // many cards = brisker, so it does not drag on
       const step = Motion.t(drops.length > 20 ? 55 : drops.length > 12 ? 85 : 120);
 
       Sfx.chargeUp(Motion.t(450) / 1000);
       await wait(skipRequested ? 0 : Motion.t(450));
 
-      // --- 1) otoceni: zatim je videt jen rarita ---
+      // --- 1) turning: only the rarity is visible so far ---
       for (const { card, drop } of cards) {
         card.classList.add('is-open');
         const r = rank(drop.rarity);
@@ -631,12 +632,12 @@ globalThis.Reel = (function () {
       }
       await wait(skipRequested ? 0 : Motion.t(550));
 
-      // --- 2) odhaleni: bezne vsechny jednou vlnou, vzacne pak kazda zvlast ---
-      // Rozestup vlny resi CSS (--ud), ne cekani v JS - jinak kazda karta narazi
-      // na minimum v Motion.t() a u dvaceti obycejnych veci se to vlece.
+      // --- 2) the reveal: common ones in one wave, rare ones one at a time ---
+      // The spacing of the wave is CSS (--ud), not a wait in JS - otherwise every card
+      // hits the minimum in Motion.t() and with twenty common things it drags.
       const commons = cards.filter((c) => rank(c.drop.rarity) === 0);
       const rares = cards.filter((c) => rank(c.drop.rarity) >= 1)
-        .sort((a, b) => rank(a.drop.rarity) - rank(b.drop.rarity));   // nejlepsi posledni
+        .sort((a, b) => rank(a.drop.rarity) - rank(b.drop.rarity));   // the best one last
 
       if (commons.length) {
         commons.forEach((c, i) => {
@@ -654,7 +655,7 @@ globalThis.Reel = (function () {
         await wait(skipRequested ? 0 : Motion.t(420 + r * 60));
       }
 
-      // nejlepsi kus si na zaver rekne o pozornost
+      // the best piece asks for attention at the end
       const top = cards.find((c) => c.drop === best);
       if (top) {
         top.card.classList.add('is-top');
@@ -668,39 +669,40 @@ globalThis.Reel = (function () {
   }
 
   // ======================================================================
-  //  OBRAD ODEMKNUTI
+  //  THE UNLOCK CEREMONY
   // ======================================================================
 
   /**
-   * Zadna ruleta - tady uz vis, co dostanes. Shard se sbali do hextech jadra,
-   * to praskne a zustane po nem permanent v ramu.
+   * No roulette - you already know what you get. The shard folds into a hextech
+   * core, the core cracks and a framed permanent is left behind.
    */
   /*
-   * Velke obrazky (karta pri odemknuti, portal pri rerollu) maji 900 px na sirku.
-   * `img` v dropu je ctvercovy vyrez 380x380, ktery se tam jen rozmaze a orizne.
-   * Cela kresba je "uncentered" splash (1215x717, skoro presne 16:9); v lootu
-   * je jen "centered", odvozeni sedi u vsech skinu i zakladnich sampionu.
+   * The big images (the card when unlocking, the portal in a reroll) are 900 px
+   * wide. The `img` in a drop is a square 380x380 crop, which only blurs and
+   * gets cropped there. The whole artwork is the "uncentered" splash (1215x717,
+   * almost exactly 16:9); loot only carries the "centered" one, and the
+   * derivation holds for every skin and base champion.
    */
   function fullArtUrl(drop) {
     const s = String((drop && drop.splash) || '');
     return s ? s.replace(/_splash_centered_/i, '_splash_uncentered_') : '';
   }
 
-  /** Zacne nacitat celou kresbu hned, at je pri zvetseni pripravena. */
+  /** Starts loading the full artwork right away, so it is ready when the card grows. */
   function preloadArt(drop) {
     const art = { url: fullArtUrl(drop), ready: false, failed: false, target: null };
     if (!art.url || typeof Image !== 'function') return art;
     const pre = new Image();
     pre.onload = () => {
       art.ready = true;
-      if (art.target) art.target.src = art.url;   // dorazila az po zvetseni - vymenit hned
+      if (art.target) art.target.src = art.url;   // it arrived after the card grew - swap it in at once
     };
-    pre.onerror = () => { art.failed = true; };   // zustane vyrez, lepsi nez nic
+    pre.onerror = () => { art.failed = true; };   // the crop stays, better than nothing
     pre.src = art.url;
     return art;
   }
 
-  /** Nasadi celou kresbu, jakmile je (nebo az bude) nactena. */
+  /** Puts the full artwork in as soon as it is (or once it gets) loaded. */
   function showArt(img, art) {
     if (!img || !art.url || art.failed) return;
     if (art.ready) img.src = art.url;
@@ -711,7 +713,7 @@ globalThis.Reel = (function () {
     skipRequested = false;
     const rarity = drop.rarity || 'DEFAULT';
     const art = preloadArt(drop);
-    // ikony, emoty a chromy nejsou 16:9 kresby - roztazene by byly rozmazane
+    // icons, emotes and chromas are not 16:9 artwork - stretched they would be blurry
     const iconLike = drop.icon && !art.url;
 
     const stage = makeEl('unlock-stage', `
@@ -751,7 +753,7 @@ globalThis.Reel = (function () {
 
       stage.classList.remove('phase-charge');
       stage.classList.add('phase-burst');
-      // karta se ted roztahne na celou sirku - vymena za celou kresbu schova zablesk
+      // the card grows to full width now - the swap hides inside the flash
       showArt(stage.querySelector('.unlock-card img'), art);
       Sfx.unlockBurst(rarity);
       shards(stage, rarity, 36, 300);
@@ -770,12 +772,12 @@ globalThis.Reel = (function () {
   // ======================================================================
 
   /**
-   * Tri shardy se polozi na oltar, roztoci se ve viru, zhrouti se do jadra
-   * a z portalu, ve kterem se mihaji skiny, vypadne jeden novy.
+   * Three shards are placed on an altar, spun up in a vortex, collapsed into a
+   * core, and a new skin falls out of the portal the skins flash through.
    *
-   * Na rozdil od odemykani se tu opravdu losuje, takze napeti v portalu je
-   * na miste. Barva rarity vysledku (--win) se proto nastavi az v rozkvetu -
-   * driv by ji prozradila zare za scenou.
+   * Unlike unlocking, something really is rolled here, so the tension in the
+   * portal is earned. The result's rarity colour (--win) is therefore set only
+   * at the bloom - earlier the glow behind the scene would give it away.
    */
   function reroll(offered, result, pool, host) {
     skipRequested = false;
@@ -809,11 +811,11 @@ globalThis.Reel = (function () {
     const portalImg = portal.querySelector('img');
     const label = stage.querySelector('.rr-label');
 
-    // co se bude mihat v portalu: nahodne kusy z vyplne, na konci vysledek
+    // what flashes through the portal: random pieces of the filler, the result last
     const frames = [];
     const src = (pool || []).filter((x) => x && x.img);
     let last = -1;
-    const FLICKS = Motion.fast ? 8 : 21;   // v rychlem rezimu min snimku, ne jen kratsi
+    const FLICKS = Motion.fast ? 8 : 21;   // fewer frames in fast mode, not just shorter ones
     for (let k = 0; k < FLICKS && src.length; k++) {
       let idx = Math.floor(Math.random() * src.length);
       if (src.length > 1 && idx === last) idx = (idx + 1) % src.length;
@@ -821,8 +823,8 @@ globalThis.Reel = (function () {
       frames.push(src[idx]);
     }
     frames.push(result);
-    const art = preloadArt(result);   // do rozkvetu je casu dost
-    // nacist predem, jinak by rychle mihani ukazovalo prazdna okna
+    const art = preloadArt(result);   // there is plenty of time before the bloom
+    // preload, otherwise the quick flashing would show empty frames
     if (typeof Image === 'function') {
       frames.forEach((f) => { if (f.img) { const im = new Image(); im.src = f.img; } });
     }
@@ -837,7 +839,7 @@ globalThis.Reel = (function () {
     };
 
     return (async () => {
-      // --- 1) oltar: shardy vyleti zespodu a zapadnou do trojuhelniku ---
+      // --- 1) the altar: shards fly in from below into a triangle ---
       stage.classList.add('phase-offer');
       cards.forEach((c, i) => place(c, Math.cos(base[i]) * R, Math.sin(base[i]) * R + 320, 0.55, 0, 0, 0));
       for (let i = 0; i < cards.length; i++) {
@@ -848,7 +850,7 @@ globalThis.Reel = (function () {
       }
       await wait(Motion.t(700));
 
-      // --- 2) vir: krouzi, zrychluji, stahuji se do stredu ---
+      // --- 2) the vortex: they circle, speed up and are pulled to the centre ---
       stage.classList.remove('phase-offer');
       stage.classList.add('phase-vortex');
       cards.forEach((c) => c.classList.add('is-orbiting'));
@@ -876,7 +878,7 @@ globalThis.Reel = (function () {
         frame(performance.now());
       });
 
-      // --- 3) zhrouceni ---
+      // --- 3) the collapse ---
       cards.forEach((c) => c.remove());
       stage.classList.remove('phase-vortex');
       stage.classList.add('phase-implode');
@@ -884,7 +886,7 @@ globalThis.Reel = (function () {
       shards(stage, 'GOLD', 30, 260);
       await wait(Motion.t(420));
 
-      // --- 4) portal: skiny se mihaji a zpomaluji ---
+      // --- 4) the portal: skins flash by and slow down ---
       stage.classList.remove('phase-implode');
       stage.classList.add('phase-portal');
       for (let k = 0; k < frames.length; k++) {
@@ -900,11 +902,11 @@ globalThis.Reel = (function () {
       }
       portalImg.src = result.img || '';
 
-      // --- 5) rozkvet: az ted se prozradi rarita ---
+      // --- 5) the bloom: only now is the rarity given away ---
       stage.style.setProperty('--win', rarityVar(rarity));
       stage.classList.remove('phase-portal');
       stage.classList.add('phase-bloom');
-      showArt(portalImg, art);   // portal se roztahne - cela kresba misto ctvercoveho vyrezu
+      showArt(portalImg, art);   // the portal grows - the full artwork instead of a square crop
       if (rank(rarity) >= 2) stage.classList.add('is-big');
       label.textContent = 'NEW SKIN';
       label.classList.add('is-final');
@@ -916,7 +918,7 @@ globalThis.Reel = (function () {
 
   function skip() { skipRequested = true; }
 
-  /** Cedule s hlavni vyhrou. */
+  /** The banner with the main prize. */
   function bannerHtml(drop, extra) {
     const rarity = drop.rarity || 'DEFAULT';
     return `<div class="reel-banner rare-${rarity}" style="--win:${rarityVar(rarity)}">

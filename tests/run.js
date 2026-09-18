@@ -2,12 +2,12 @@
 'use strict';
 
 /*
- * Spusti vsechny testy:            node tests/run.js
- * Jen nektere (podle nazvu):       node tests/run.js reroll animace
+ * Runs every test:                 node tests/run.js
+ * Only some (by file name):        node tests/run.js reroll animace
  *
- * Kazdy *.test.js bezi ve vlastnim procesu. Testy, ktere potrebuji bezici
- * server a prihlaseneho klienta, se bez nich preskoci (SKIP), neselzou.
- * Zadny test nesaha na ucet - POST je v harness.js zablokovany.
+ * Every *.test.js runs in its own process. Tests that need a running server and
+ * a logged-in client are skipped without them (SKIP), they do not fail.
+ * No test touches the account - POST is blocked in harness.js.
  */
 
 const fs = require('fs');

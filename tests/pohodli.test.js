@@ -1,10 +1,10 @@
 'use strict';
 
 /*
- * Quality of life: hvezdicka (chraneny shard), zapamatovany stav UI,
- * upozorneni na novy loot a prubeh se Stopem u "Otevrit vse".
- * Nic se neotevre ani nerozlozi - POST blokuje harness, uspech se podvrhne.
- * Potrebuje server a klienta.
+ * Quality of life: the star (a protected shard), the remembered UI state, the
+ * new-loot notice and the progress with Stop for "Open all".
+ * Nothing is opened or disenchanted - the harness blocks POST and success is
+ * faked. Needs the server and the client.
  */
 
 const { createEnv, clientStatus, suite, sleep } = require('./harness');
@@ -28,16 +28,16 @@ const t = suite('pohodli');
   await app.loadLoot();
   const S = app.state;
 
-  // ------------------------------------------------------ uvodni obrazovka
+  // ----------------------------------------------------- the connection screen
   t.section('uvodni obrazovka');
   const boot = $('#boot');
-  // pripojeno: animace, jmeno, pak zmizi
+  // connected: the animation, the name, then it leaves
   for (let i = 0; i < 40 && !boot.hidden; i++) await sleep(100);
   t.ok(boot.hidden && !document.body.classList.contains('boot-open'), 'po pripojeni a nacteni lootu zmizi a pusti rolovani');
   t.ok(/^Welcome, .+/.test($('#boot-name').textContent), `pozdravi hrace: "${$('#boot-name').textContent.replace(/#.*/, '#…')}"`);
   t.ok($('#boot-status').textContent === 'Connected', 'stav Connected');
 
-  // klient odpadl
+  // the client dropped out
   app.setConnected(false);
   app.bootWaiting();
   t.ok(!boot.hidden && boot.classList.contains('is-searching') && document.body.classList.contains('boot-open'), 'klient odpadl: obrazovka se vrati (hledani)');
@@ -57,7 +57,7 @@ const t = suite('pohodli');
   t.ok(boot.hidden, 'behem akce (odhaleni) se neukazuje');
   S.busy = false;
 
-  // ------------------------------------------------------------ hvezdicka
+  // ------------------------------------------------------------------ the star
   t.section('hvezdicka');
   const realSkins = app.itemsIn('skins').filter((i) => !i.isTest);
   if (realSkins.length < 2) t.skip('test potrebuje aspon 2 skin shardy');
@@ -79,8 +79,8 @@ const t = suite('pohodli');
   app.setFilter('skins', 'own', '');
 
   if (realSkins.length >= 4) {
-    // shard, ktery by "Suggest 3" jinak vzal nejdriv
-    // jiny nez uz oznaceny - jinak by druhy toggle hvezdicku zase sundal
+    // the shard "Suggest 3" would otherwise take first
+    // a different one from the starred shard - a second toggle would unstar it again
     const cheapest = realSkins.filter((i) => i !== star).sort((a, b) => (b.redeemableStatus === 'ALREADY_OWNED') - (a.redeemableStatus === 'ALREADY_OWNED') || a.disenchantValue - b.disenchantValue)[0];
     app.toggleFavorite(cheapest.lootId);
     app.suggestReroll();
@@ -89,7 +89,7 @@ const t = suite('pohodli');
     S.selected.clear();
   }
 
-  // uklid: umely vlastneny champion shard
+  // clean up: an artificial owned champion shard
   const fake = {
     lootId: 'CHAMPION_RENTAL_9911', type: 'CHAMPION_RENTAL', count: 2, itemDesc: 'POHODLI Champ', rarity: 'DEFAULT',
     disenchantValue: 500, disenchantLootName: 'CURRENCY_champion', redeemableStatus: 'ALREADY_OWNED', itemStatus: 'OWNED',
@@ -104,7 +104,7 @@ const t = suite('pohodli');
   app.openCleanup();
   t.ok(/2 starred items are protected/.test($('#cleanup-total').innerHTML), 'uklid rekne, kolik je chranenych');
 
-  env.autoConfirm = false;   // jen precist potvrzeni, nic neposilat
+  env.autoConfirm = false;   // only read the confirmation, send nothing
   const pending = app.disenchant([star.lootId]);
   await sleep(10);
   t.ok(/^Includes starred: /.test($('#modal-text').textContent), `rucni rozlozeni oznaceneho varuje: "${$('#modal-text').textContent.slice(0, 50)}…"`);
@@ -116,7 +116,7 @@ const t = suite('pohodli');
   app.toggleFavorite(fake.lootId);
   t.ok(!app.isFavorite(star.lootId) && JSON.parse(env.mem['lootforge.favorites']).length === 0, 'druhy klik hvezdicku sunda');
 
-  // ------------------------------------------------------------ novy loot
+  // ------------------------------------------------------------- the new loot
   t.section('upozorneni na novy loot');
   const prev = new Map([['CURRENCY_champion', 100], ['MATERIAL_key', 2]]);
   const gains = app.lootGains(prev, [
@@ -137,7 +137,7 @@ const t = suite('pohodli');
     if (be) be.count += extra;
     return { ok: true, status: 200, json: async () => loot, text: async () => JSON.stringify(loot) };
   };
-  await app.loadLoot();   // vychozi stav
+  await app.loadLoot();   // the starting point
   $('#toast').textContent = '';
   extra = 450;
   await app.loadLoot();
@@ -155,20 +155,20 @@ const t = suite('pohodli');
   global.fetch = realFetch;
   await app.loadLoot({ quiet: true });
 
-  // ------------------------------------------------- otevrit vse: prubeh
+  // ------------------------------------------------- open all: the progress
   t.section('otevrit vse: prubeh a stop');
   const chest = {
     lootId: 'CHEST_9912', type: 'CHEST', count: 12, itemDesc: 'POHODLI Chest', rarity: 'DEFAULT',
     redeemableStatus: 'NOT_REDEEMABLE', itemStatus: 'NONE',
   };
   const withFakeChest = () => {
-    // jen umela bedna - skutecne bedny z planu vynechat
-    // po nacteni lootu v nem zustava kopie umele bedny (JSON) - i tu pryc
+    // only the artificial chest - leave real chests out of the plan
+    // after loading the loot a copy of the artificial chest stays in it (JSON) - drop that too
     S.items = S.items.filter((i) => i.lootId !== chest.lootId && !app.isOpenable(i)).concat([chest]);
     S.byId = new Map(S.items.map((i) => [i.lootId, i]));
     S.recipes.set(chest.lootId, [{ type: 'OPEN', recipeName: 'CHEST_9912_OPEN', slots: [{ slotNumber: 0, lootIds: [chest.lootId], quantity: 1 }] }]);
   };
-  // obnoveni lootu uprostred smycky: skutecny loot + umela bedna
+  // the loot reload inside the loop: the real loot plus the artificial chest
   global.fetch = async (url, init) => {
     const res = await realFetch(url, init);
     if (url !== '/lcu/lol-loot/v1/player-loot') return res;
@@ -207,8 +207,8 @@ const t = suite('pohodli');
   env.postResponse = null;
   global.fetch = realFetch;
 
-  // druha a treti appka prepisou globalni napodobeniny DOMu - proto az na konci
-  // ----------------------------------------------------- zapamatovany stav
+  // the second and third app overwrite the first one's global DOM stand-ins - hence last
+  // ------------------------------------------------------ the remembered state
   t.section('zapamatovany stav');
   app.setFilter('skins', 'q', 'tohle se neulozi');
   app.setFilter('skins', 'sort', 'value');
@@ -231,6 +231,6 @@ const t = suite('pohodli');
   const S3 = env3.load(['reel.js', 'simulator.js', 'app.js'], ['state']).state;
   t.ok(S3.scope === 'chests' && S3.filters.skins.sort === 'rarity' && S3.collection.kind === 'skins', 'poskozeny zaznam se ignoruje');
 
-  await sleep(300);   // boot druhe a treti appky dobehne
+  await sleep(300);   // the boot of the second and third app finishes
   t.done();
 })().catch(t.crash);

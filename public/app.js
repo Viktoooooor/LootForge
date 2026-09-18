@@ -1,27 +1,28 @@
-/* LootForge - klientska logika.
+/* LootForge - the browser side.
  *
- * Vsechno jde pres /lcu/* (proxy v server.js) do bezici League klienta.
- * Recepty si nevymyslime - tahame je z /lol-loot/v1/recipes/initial-item/{id},
- * takze appka funguje i na bedny a kapsle, ktere Riot prida az pozdeji.
+ * Everything goes through /lcu/* (the proxy in server.js) to the running League
+ * client. Recipes are never invented - they come from
+ * /lol-loot/v1/recipes/initial-item/{id}, so the app also works with chests and
+ * capsules Riot adds later.
  */
 
 'use strict';
 
-// --- stav ---------------------------------------------------------------
+// --- state --------------------------------------------------------------
 
 const state = {
   connected: false,
-  items: [],                 // loot polozky s lootId a count > 0
-  byId: new Map(),           // lootId -> polozka
-  recipes: new Map(),        // lootId -> pole receptu
-  selected: new Set(),       // lootId vybrane v aktualnim tabu
+  items: [],                 // loot items with a lootId and count > 0
+  byId: new Map(),           // lootId -> item
+  recipes: new Map(),        // lootId -> array of recipes
+  selected: new Set(),       // lootIds selected in the current tab
   scope: 'chests',           // aktivni tab
   busy: false,
-  rerollMode: false,         // zasobnik se tremi sloty v tabu skinu
+  rerollMode: false,         // the three-slot tray in the skins tab
   shop: { stores: [], loadedAt: 0, error: null, loading: false },
-  app: null,                 // { version, repo } ze serveru - kvuli kontrole nove verze
-  ownedSkins: {},            // championId -> [{ id, name, img, splash, rarity }], jen vlastnene
-  champions: {},             // championId -> jmeno
+  app: null,                 // { version, repo } from the server - for the update check
+  ownedSkins: {},            // championId -> [{ id, name, img, splash, rarity }], owned only
+  champions: {},             // championId -> name
   filters: {},               // scope -> { q, rarity, own, sort }
   collection: { data: null, loadedAt: 0, loading: false, error: null, kind: 'skins', q: '', sort: 'new', rarity: '' },
   cleanup: { rules: null, skip: new Set() },
@@ -29,8 +30,8 @@ const state = {
 
 const TABS = ['chests', 'skins', 'champs', 'other', 'shop', 'collection', 'session'];
 
-// Originalni ikony z klienta. LCU je serviruje na /lol-game-data/assets/ASSETS/Loot/,
-// zatimco cesty /fe/... z player-loot vraci 404 (viz CLAUDE.md).
+// Original icons from the client. The LCU serves them at /lol-game-data/assets/ASSETS/Loot/,
+// while the /fe/... paths from player-loot return 404 (see below in imgUrl).
 const ART = '/lol-game-data/assets/ASSETS/Loot/';
 const LOOT_ART = {
   CURRENCY_champion:     ART + 'currency_champion.png',
@@ -55,7 +56,7 @@ const RARITY_ORDER = ['DEFAULT', 'EPIC', 'LEGENDARY', 'MYTHIC', 'ULTIMATE', 'TRA
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-// --- LCU volani ---------------------------------------------------------
+// --- LCU calls ----------------------------------------------------------
 
 async function lcu(path, opts) {
   const res = await fetch('/lcu' + path, opts);
@@ -63,7 +64,7 @@ async function lcu(path, opts) {
     let detail = res.statusText;
     try { const j = await res.json(); detail = j.message || j.error || detail; } catch (_) {}
     const err = new Error(`${res.status} ${detail}`);
-    err.status = res.status;   // 502/503 = klient odpadl, ne chyba receptu
+    err.status = res.status;   // 502/503 = the client went away, not a recipe error
     throw err;
   }
   if (res.status === 204) return null;
@@ -71,7 +72,7 @@ async function lcu(path, opts) {
   return text ? JSON.parse(text) : null;
 }
 
-/** Pusti `fn` nad vsemi polozkami, ale nejvys `limit` naraz. */
+/** Runs `fn` over every item, but at most `limit` at a time. */
 async function pool(items, limit, fn) {
   const queue = items.slice();
   const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -82,7 +83,7 @@ async function pool(items, limit, fn) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// --- pomocnici nad loot polozkami ---------------------------------------
+// --- helpers for loot items ---------------------------------------------
 
 function nameOf(item) {
   if (!item) return 'Unknown item';
@@ -99,19 +100,19 @@ function prettify(id) {
 function imgUrl(item) {
   if (item && LOOT_ART[item.lootId]) return '/lcu' + LOOT_ART[item.lootId];
   const p = item && (item.tilePath || item.splashPath || item.shadowPath);
-  // /fe/* jsou assety klientskeho frontendu - ty LCU pres HTTP neserviruje (404),
-  // takze radsi nic nez rozbity obrazek. Splashe z /lol-game-data/* funguji.
+  // /fe/* are the client front-end's own assets - the LCU does not serve those
+  // over HTTP (404), so nothing beats a broken image. Splashes from /lol-game-data/* work.
   if (!p || p.startsWith('/fe/')) return '';
   return '/lcu' + p;
 }
 
-/** Nahrada za chybejici obrazek - prvni dve pismena nazvu. */
+/** Stand-in for a missing image - the first two letters of the name. */
 function glyph(item) {
   const n = nameOf(item).replace(/[^A-Za-z0-9]/g, '');
   return escapeHtml((n.slice(0, 2) || '??').toUpperCase());
 }
 
-/** Ikonky (klice, esence) nejsou 16:9 splashe - chteji jine vykresleni. */
+/** Icons (keys, essence) are not 16:9 splashes - they need different rendering. */
 function isIcon(item) {
   const p = (item && item.tilePath) || '';
   return p.includes('/lol-loot/assets/') || item.type === 'CURRENCY' || item.type === 'MATERIAL';
@@ -123,9 +124,9 @@ function countOf(lootId) {
 }
 
 /**
- * Klicova vec: /recipes/initial-item/{id} vraci VSECHNY recepty, kde se polozka
- * kdekoliv objevi - u klice to jsou vsechny bedny, u modre esence vsechny emote
- * upgrady. Nas zajima jen recept, jehoz JE polozka hlavni surovinou.
+ * The key thing: /recipes/initial-item/{id} returns EVERY recipe the item shows
+ * up in - for a key that means every chest, for Blue Essence every emote
+ * upgrade. We only want the recipe the item is the main ingredient of.
  */
 function recipeAppliesTo(recipe, item) {
   const slots = recipe.slots || [];
@@ -133,13 +134,13 @@ function recipeAppliesTo(recipe, item) {
   const ids = (first && first.lootIds) || [];
   if (ids.length) return ids.includes(item.lootId);
 
-  // prazdny prvni slot -> klient do nej nemel co dat. Recept pak patri k polozce,
-  // jen kdyz je po ni pojmenovany: CHEST_224 + "_open", ne MATERIAL_key + "_fragment_forge".
+  // empty first slot -> the client had nothing to put there. The recipe then belongs
+  // to the item only if it is named after it: CHEST_224 + "_open", not MATERIAL_key + "_fragment_forge".
   const name = String(recipe.recipeName || '').toLowerCase();
   const prefix = item.lootId.toLowerCase() + '_';
   if (name.startsWith(prefix) && !name.slice(prefix.length).includes('_')) return true;
 
-  // pojistka pro bedny s netypickym nazvem receptu
+  // fallback for chests with an unusual recipe name
   return item.type === 'CHEST' && recipe.type === 'OPEN';
 }
 
@@ -155,7 +156,7 @@ function isOpenable(item) {
   return recipesFor(item.lootId).some((r) => r.type === 'OPEN' || r.type === 'FORGE');
 }
 
-/** Shard je zapujcka (typ konci na _RENTAL); vsechno ostatni uz mas natrvalo. */
+/** A shard is a rental (its type ends with _RENTAL); everything else is already yours. */
 function isShard(item) {
   return /_RENTAL$/.test(item.type || '');
 }
@@ -165,9 +166,9 @@ function alreadyOwned(item) {
 }
 
 /**
- * Nacpe do slotu receptu konkretni lootId, ktere hrac fakt ma.
- * `prefer` je polozka, na kterou hrac kliknul (aby se otevrela prave ta bedna).
- * Vraci pole lootId (jedno na slot) nebo null, kdyz na to nema.
+ * Fills the recipe's slots with lootIds the player actually has.
+ * `prefer` is the item the player clicked (so that chest is the one opened).
+ * Returns one lootId per slot, or null when the player cannot afford it.
  */
 function fillSlots(recipe, prefer, extraUsed) {
   const used = Object.assign({}, extraUsed || {});
@@ -189,9 +190,9 @@ function fillSlots(recipe, prefer, extraUsed) {
 }
 
 /**
- * Klient necha slot.lootIds prazdny, kdyz do nej nic z inventare nesedi
- * (typicky slot na samotnou bednu). V tom pripade patri do slotu prave ta
- * polozka, na kterou hrac kliknul.
+ * The client leaves slot.lootIds empty when nothing in the inventory fits the
+ * slot (typically the slot for the chest itself). In that case the slot belongs
+ * to the very item the player clicked.
  */
 function slotIds(slot, prefer) {
   const ids = slot.lootIds || [];
@@ -199,7 +200,7 @@ function slotIds(slot, prefer) {
   return prefer ? [prefer] : [];
 }
 
-/** Kolikrat po sobe jde recept spustit se soucasnym inventarem. */
+/** How many times in a row the recipe can run with the current inventory. */
 function maxRepeats(recipe, prefer) {
   if (!recipe) return 0;
   let max = Infinity;
@@ -216,9 +217,10 @@ function maxRepeats(recipe, prefer) {
 }
 
 /**
- * Jedina cesta, kterou appka neco vyrabi. Testovaci polozky se odchyti presne
- * tady - dal uz zadny request nepokracuje. Vsechno pred tim (potvrzeni, vyber,
- * actionbar) probehne uplne stejne jako naostro, takze to jde poradne otestovat.
+ * The only path through which the app crafts anything. Test items are caught
+ * right here - no request goes any further. Everything before that
+ * (confirmation, selection, action bar) runs exactly as it does for real, so it
+ * can be tested properly.
  */
 async function craft(recipeName, lootIds, repeat) {
   const items = lootIds.map((id) => state.byId.get(id));
@@ -236,13 +238,13 @@ async function craft(recipeName, lootIds, repeat) {
 
 const isTestBatch = (ids) => ids.some((id) => (state.byId.get(id) || {}).isTest);
 
-/** Michat testovaci a ostre polozky v jedne akci nedava smysl - a je to nebezpecne. */
+/** Mixing test and real items in one action makes no sense - and is dangerous. */
 function isMixedBatch(ids) {
   const flags = ids.map((id) => !!(state.byId.get(id) || {}).isTest);
   return flags.includes(true) && flags.includes(false);
 }
 
-/** Z odpovedi craftu vytahne, co hrac dostal. */
+/** Pulls what the player got out of a craft response. */
 function dropsFrom(res) {
   const rows = [].concat(res && res.added || [], res && res.redeemed || []);
   return rows.map((row) => {
@@ -260,7 +262,7 @@ function dropsFrom(res) {
   }).filter((d) => d.name && d.name !== 'Unknown item');
 }
 
-// --- nacitani -----------------------------------------------------------
+// --- loading ------------------------------------------------------------
 
 async function checkConnection() {
   try {
@@ -270,7 +272,7 @@ async function checkConnection() {
     if (!s.connected) bootWaiting();
     return s.connected;
   } catch (_) {
-    // neodpovida ani nas server - exe se zavrel (nebo spadl)
+    // not even our own server answers - the exe was closed (or crashed)
     setConnected(false);
     setBootPhase('stopped');
     return false;
@@ -287,8 +289,8 @@ function setConnected(on) {
 }
 
 /**
- * opts.quiet = nacteni po vlastni akci appky. Zmeny lootu se pak nehlasi -
- * co padlo, hrac prave videl v odhaleni.
+ * opts.quiet = a reload after the app's own action. Loot changes are not
+ * announced then - the player has just seen the drops in the reveal.
  */
 async function loadLoot(opts) {
   if (!await checkConnection()) { lootSnapshot = null; renderAll(); return; }
@@ -299,7 +301,7 @@ async function loadLoot(opts) {
   const previous = lootSnapshot;
   lootSnapshot = new Map(state.items.map((i) => [i.lootId, i.count]));
 
-  // recepty pro kazdou polozku - z nich plyne, co s ni jde delat
+  // recipes for every item - they say what can be done with it
   const fresh = new Map();
   const skinsLoad = loadOwnedSkins();
   await pool(state.items, 6, async (item) => {
@@ -313,8 +315,8 @@ async function loadLoot(opts) {
   state.recipes = fresh;
   await skinsLoad;
 
-  // testovaci polozky ziji jen v prohlizeci - do klienta se nikdy nedostanou.
-  // Ve verejne verzi jsou vypnute, zapinaji se v Nastaveni.
+  // test items live in the browser only - they never reach the client.
+  // In the public build they are off and turned on in Settings.
   if (globalThis.TestChest && testItemsOn()) {
     const t = TestChest.item();
     if (!state.byId.has(t.lootId)) {
@@ -331,7 +333,7 @@ async function loadLoot(opts) {
         state.byId.set(sh.lootId, sh);
         state.recipes.set(sh.lootId, TestChest.recipesFor(sh));
       }
-    } catch (_) { /* bez dat z klienta testovaci shardy proste nebudou */ }
+    } catch (_) { /* without client data there simply are no test shards */ }
   }
 
   renderAll();
@@ -339,12 +341,12 @@ async function loadLoot(opts) {
   bootConnected();
 }
 
-// --- kategorizace -------------------------------------------------------
+// --- categories ---------------------------------------------------------
 
 function bucket(item) {
   if (item.isTest) return item.type === 'CHEST' ? 'chests' : (item.type === 'SKIN_RENTAL' ? 'skins' : 'champs');
-  // poradi zalezi: fragmenty klicu jsou v penezence, ale zaroven se z nich
-  // kuje klic - tak at maji kartu s tlacitkem v tabu Bedny
+  // order matters: key fragments are in the wallet, but a key is forged from
+  // them - so they get a card with a button in the Chests tab
   if (isOpenable(item)) return 'chests';
   if (WALLET.some(([id]) => id === item.lootId)) return 'wallet';
   if (item.type === 'SKIN_RENTAL') return 'skins';
@@ -356,7 +358,7 @@ function itemsIn(scope) {
   return state.items.filter((i) => bucket(i) === scope);
 }
 
-// --- vykreslovani -------------------------------------------------------
+// --- rendering ----------------------------------------------------------
 
 function renderAll() {
   renderWallet();
@@ -373,14 +375,14 @@ function renderAll() {
   if (!$('#cleanup').hidden) renderCleanup();
 }
 
-let walletPrev = null;   // lootId -> pocet pri poslednim vykresleni
+let walletPrev = null;   // lootId -> count at the last render
 
-/** Penezenka. Zmena proti minule se kratce rozsviti (+450 / -1050). */
+/** The wallet. A change since last time lights up briefly (+450 / -1050). */
 function renderWallet() {
   const now = new Map(WALLET.map(([id]) => [id, countOf(id)]));
   const prev = walletPrev;
   walletPrev = now;
-  // beze zmeny nekreslit znovu - jinak by dalsi renderAll utnul probihajici zablesk
+  // unchanged means do not redraw - another renderAll would cut the flash short
   if (prev && WALLET.every(([id]) => prev.get(id) === now.get(id)) && $('#wallet').innerHTML) return;
 
   $('#wallet').innerHTML = WALLET.map(([id, label]) => {
@@ -395,16 +397,16 @@ function renderWallet() {
   }).join('');
 }
 
-// --- novy loot -------------------------------------------------------------
+// --- new loot --------------------------------------------------------------
 
-let lootSnapshot = null;   // lootId -> pocet z posledniho nacteni lootu
+let lootSnapshot = null;   // lootId -> count from the last loot load
 
 function lootLabel(item) {
   const known = WALLET.find(([id]) => id === item.lootId);
   return known ? known[1] : nameOf(item);
 }
 
-/** Co pribylo proti minulemu nacteni. Testovaci polozky se nepocitaji. */
+/** What was added since the last load. Test items do not count. */
 function lootGains(previous, items) {
   return items
     .filter((i) => !i.isTest)
@@ -416,8 +418,8 @@ function lootGains(previous, items) {
 }
 
 /**
- * Hrac dohral hru nebo neco dostal v klientovi - at to vi i tady.
- * Ubytek (bedna otevrena v klientovi) se nehlasi, to udelal sam.
+ * The player finished a game or got something in the client - show it here too.
+ * A decrease (a chest opened in the client) is not announced, they did that.
  */
 function notifyLootChanges(previous) {
   const gains = lootGains(previous, state.items);
@@ -438,7 +440,7 @@ function renderChestHeader() {
     : 'No chests in your inventory.';
 }
 
-// --- filtry -------------------------------------------------------------
+// --- filters ------------------------------------------------------------
 
 const FILTER_SCOPES = ['skins', 'champs', 'other'];
 
@@ -447,7 +449,7 @@ function filterOf(scope) {
   return state.filters[scope];
 }
 
-/** Hledani bez ohledu na diakritiku a velikost pismen. */
+/** Search that ignores diacritics and letter case. */
 function fold(s) {
   return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
@@ -457,7 +459,7 @@ function isFiltered(scope) {
   return !!(f && (f.q || f.rarity || f.own));
 }
 
-/** Polozky tabu po filtru a v poradi, ve kterem se kresli. */
+/** The tab's items after filtering, in the order they are drawn. */
 function visibleIn(scope, list) {
   const all = list || itemsIn(scope);
   if (!FILTER_SCOPES.includes(scope)) return all;
@@ -482,7 +484,7 @@ function visibleIn(scope, list) {
     name: byName,
   };
   const sorter = sorters[f.sort] || sorters.rarity;
-  // testovaci polozky vzdycky na konec, oblibene (hvezdicka) vzdycky napred
+  // test items always last, starred ones always first
   return out.sort((a, b) => (!!a.isTest !== !!b.isTest ? (a.isTest ? 1 : -1) : 0)
     || (isFavorite(b.lootId) - isFavorite(a.lootId))
     || sorter(a, b));
@@ -523,7 +525,7 @@ function renderGrid(scope, list) {
     return;
   }
 
-  // u sampionu a skinu je rozdil shard / permanent zasadni - at je videt na prvni pohled
+  // for champions and skins the shard / permanent difference matters - make it obvious
   if (scope === 'champs' || scope === 'skins') {
     const shards = sorted.filter(isShard);
     const perms = sorted.filter((i) => !isShard(i));
@@ -559,7 +561,7 @@ function cardHtml(item, scope) {
 
   const canOpen = open ? maxRepeats(open, id) : 0;
   const upgCost = upg ? (item.upgradeEssenceValue || 0) : 0;
-  // u testovaci polozky nas nezajima, jestli na to hrac ma - je to simulace
+  // for a test item it does not matter whether the player can afford it - it is a simulation
   const canUpgrade = item.isTest || (upg && upgCost > 0 && countOf(item.upgradeEssenceName || currencyForUpgrade(item)) >= upgCost);
 
   const actions = [];
@@ -571,7 +573,7 @@ function cardHtml(item, scope) {
     const canForge = maxRepeats(forge, id);
     actions.push(btn(`forge:${id}:${Math.max(1, canForge)}`, `Forge (${canForge})`, canForge < 1));
   }
-  // co uz mas natrvalo, nema smysl odemykat - klient by to stejne odmitl
+  // no point unlocking what is already yours - the client would refuse anyway
   if (upg && !alreadyOwned(item)) {
     actions.push(btn(`upgrade:${id}`, `Unlock (${upgCost.toLocaleString('en-US')})`, !canUpgrade));
   }
@@ -588,8 +590,8 @@ function cardHtml(item, scope) {
       ? '<span class="card-badge is-shard">SHARD</span>'
       : '<span class="card-badge is-perm">PERMANENT</span>';
 
-  // u shardu je "uz ho mas" dulezita informace (duplikat = kandidat na rozlozeni
-  // nebo reroll), u permanentu je to samozrejme - tam ji nekreslime
+  // for a shard "you already own it" matters (a duplicate is a candidate for
+  // disenchanting or a reroll); for a permanent it is obvious, so it is left out
   const owned = shard && alreadyOwned(item);
 
   return `<div class="card ${item.isTest ? 'card-test' : shard ? 'card-shard' : 'card-perm'} ${owned ? 'is-owned' : ''} ${isFavorite(id) ? 'is-fav' : ''} ${state.selected.has(id) ? 'is-selected' : ''}" data-id="${id}" ${selectable ? 'data-selectable="1"' : ''} ${recipeOfType(id, 'REROLL') ? 'data-rr="1"' : ''} ${selectable && skinIdOf(item) ? 'data-detail="1"' : ''}>
@@ -611,7 +613,7 @@ function cardHtml(item, scope) {
   </div>`;
 }
 
-/** Karta testovaci bedny - vizualne oddelena, at si ji nikdo nesplete s ostrou. */
+/** The test chest card - visually distinct so nobody mistakes it for a real one. */
 function testCardHtml(item) {
   const id = item.lootId;
   return `<div class="card card-test" data-id="${id}">
@@ -653,7 +655,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-// --- akce ---------------------------------------------------------------
+// --- actions ------------------------------------------------------------
 
 async function withBusy(fn) {
   if (state.busy) return;
@@ -689,9 +691,9 @@ async function openChest(lootId, repeat) {
 }
 
 /**
- * Otevre testovaci bednu. Nikam neposila zadny request - odmeny se losuji
- * v prohlizeci ze skutecnych dat klienta. Do statistik ani historie nejdou,
- * at zustanou poctive.
+ * Opens the test chest. Sends no request at all - the rewards are rolled in the
+ * browser from real client data. They stay out of the statistics and history so
+ * those stay honest.
  */
 async function openTestChest(count, onlyRare) {
   if (state.busy || !globalThis.TestChest) return;
@@ -725,8 +727,8 @@ async function forgeItem(lootId, repeat) {
   });
 }
 
-// Po kolika bednach se "Otevrit vse" posila. Mensi davky = jde to zastavit
-// a ukazatel prubehu se hybe; vetsi = min requestu. 5 je rozumny kompromis.
+// How many chests "Open all" sends at once. Smaller batches = it can be stopped
+// and the progress bar moves; larger = fewer requests. 5 is a sensible middle.
 const OPEN_CHUNK = 5;
 let stopRequested = false;
 
@@ -764,7 +766,7 @@ async function openEverything() {
     chests: for (const { item, times } of plan) {
       const recipe = recipeOfType(item.lootId, 'OPEN');
       for (let done = 0; done < times;) {
-        // zastavit jde jen mezi davkami - rozjeta davka uz na klientovi probehne
+        // stopping is only possible between batches - a batch already sent will finish
         if (stopRequested) { stopped = true; break chests; }
         const ids = fillSlots(recipe, item.lootId);
         const n = Math.min(OPEN_CHUNK, times - done, maxRepeats(recipe, item.lootId));
@@ -777,19 +779,19 @@ async function openEverything() {
           all.push(...drops);
           opened += n;
           done += n;
-          recordChests(nameOf(item), n, drops);   // po kazde davce - kdyby pak klient odpadl
+          recordChests(nameOf(item), n, drops);   // after every batch - in case the client drops out afterwards
           showProgress(opened, total);
         } catch (err) {
-          // kdyz odpadne klient, nema smysl bouchat hlavou do zdi u kazde dalsi bedny
+          // when the client goes away there is no point banging on every remaining chest
           if (err.status === 502 || err.status === 503) {
             aborted = true;
             toast(`The client stopped responding. Opened ${opened} before that.`, true);
             break chests;
           }
           toast(`${nameOf(item)}: ${err.message}`, true);
-          break;   // tahle bedna nejde, zkusit dalsi druh
+          break;   // this chest will not open, try the next kind
         }
-        // klient si to potrebuje srovnat, nezavalime ho
+        // the client needs a moment to catch up, do not flood it
         await sleep(220);
         const fresh = await lcu('/lol-loot/v1/player-loot');
         state.items = (fresh || []).filter((i) => i.lootId && i.count > 0);
@@ -834,8 +836,8 @@ async function disenchant(lootIds) {
 }
 
 /**
- * Rozlozi `count` kusu z kazde polozky. Potvrzeni uz musi byt za nami.
- * Pocet muze byt mensi nez cely stack - uklid si nechava jeden kus.
+ * Disenchants `count` pieces of each item. The confirmation must be done by now.
+ * The count can be smaller than the whole stack - clean up keeps one copy.
  */
 async function runDisenchant(entries, title) {
   const test = isTestBatch(entries.map((e) => e.item.lootId));
@@ -852,7 +854,7 @@ async function runDisenchant(entries, title) {
         const res = await craft(recipe.recipeName, ids, Math.min(count, item.count));
         const drops = dropsFrom(res);
         gained.push(...drops);
-        done += Math.min(count, item.count);     // do statistik jen to, co fakt proslo
+        done += Math.min(count, item.count);     // only what actually went through counts towards the statistics
         if (!test) bumpStats({ disenchanted: Math.min(count, item.count), gained: currencyOf(drops) });
       } catch (err) {
         if (err.status === 502 || err.status === 503) {
@@ -868,7 +870,7 @@ async function runDisenchant(entries, title) {
   });
 }
 
-/** Meny z dropu jako { CURRENCY_champion: 1234 } - do statistik. */
+/** Currencies from drops as { CURRENCY_champion: 1234 } - for the statistics. */
 function currencyOf(drops) {
   const out = {};
   for (const d of drops) {
@@ -889,7 +891,7 @@ async function upgrade(lootId) {
     test ? 'TEST - unlock?' : 'Unlock permanently?',
     `You will spend ${(item.upgradeEssenceValue || 0).toLocaleString('en-US')} essence and ${nameOf(item)} will be yours permanently.` +
     (test ? ' This is a simulation - nothing happens to your account.' : ''),
-    // u sampiona ukazat, jake skiny na nej uz mas - casto je to duvod ho odemknout
+    // for a champion show which skins the player already has - often the reason to unlock
     champId ? skinsGalleryHtml(champId, championName(champId) || nameOf(item), { current: skinIdOf(item) }) : ''
   );
   if (!ok) return;
@@ -913,8 +915,8 @@ async function rerollSelected() {
   if (!recipe) return toast('These shards cannot be rerolled.', true);
 
   const need = (recipe.slots || []).length || 3;
-  // presne tolik, kolik recept chce. Driv se pri vetsim vyberu vzalo
-  // libovolnych prvnich N a v potvrzeni se ani nerekl, ktere.
+  // exactly as many as the recipe wants. It used to take the first N of a larger
+  // selection without saying which ones in the confirmation.
   if (ids.length !== need) return toast(`A reroll takes exactly ${need} shards, ${ids.length} selected.`, true);
   if (ids.some((id) => !recipeOfType(id, 'REROLL'))) return toast('One of the selected shards cannot be rerolled.', true);
   if (isMixedBatch(ids)) return toast('Don\'t mix test shards with real ones.', true);
@@ -929,7 +931,7 @@ async function rerollSelected() {
   );
   if (!ok) return;
 
-  // co se polozi na oltar v animaci
+  // what gets placed on the altar in the animation
   const offered = items.map((it) => ({ name: nameOf(it), img: imgUrl(it), rarity: it.rarity || 'DEFAULT' }));
 
   await withBusy(async () => {
@@ -944,9 +946,10 @@ async function rerollSelected() {
 }
 
 /**
- * Rezim rerollu: dole se objevi zasobnik se tremi sloty, nepouzitelne karty
- * se potlaci a vyber je omezeny na tri kusy. Bez nej byl reroll schovany
- * v dolni liste a objevil se az po nahodnem vyberu tri shardu.
+ * Reroll mode: a tray with three slots appears at the bottom, cards that cannot
+ * be rerolled are dimmed and the selection is capped at three. Without it the
+ * reroll was hidden in the bottom bar and appeared only after three shards
+ * happened to be selected.
  */
 function setRerollMode(on) {
   state.rerollMode = !!on;
@@ -959,7 +962,7 @@ function setRerollMode(on) {
   renderActionbar();
 }
 
-/** Navrhne tri nejlevnejsi ostre shardy; duplikaty (skin uz mas) maji prednost. */
+/** Suggests the three cheapest real shards; duplicates (skin already owned) come first. */
 function suggestReroll() {
   const candidates = itemsIn('skins')
     .filter((i) => !i.isTest && !isFavorite(i.lootId) && isShard(i) && recipeOfType(i.lootId, 'REROLL'))
@@ -995,13 +998,13 @@ function renderRerollTray() {
   tray.hidden = false;
 }
 
-// --- oblibene (hvezdicka) ---------------------------------------------------
+// --- starred shards ---------------------------------------------------------
 
 /*
- * Oznaceny shard je chraneny: nevezme ho uklid, "Select all", "Select owned"
- * ani "Suggest 3" u rerollu. Rucne vybrat (kolecko) ho jde porad - to je
- * vedome rozhodnuti, jen potvrzeni na hvezdicku upozorni. Klic je lootId,
- * ten je pro stejny shard stalny i po odemknuti dalsich kusu.
+ * A starred shard is protected: clean up, "Select all", "Select owned" and
+ * "Suggest 3" all skip it. Picking it by hand (the circle) still works - that is
+ * a deliberate choice, the confirmation just points the star out. The key is the
+ * lootId, which stays the same for a shard even after more copies are unlocked.
  */
 let favorites = null;
 
@@ -1014,7 +1017,7 @@ function isFavorite(lootId) {
   return favSet().has(lootId);
 }
 
-/** Hvezdicku ma smysl dat jen tomu, o co jde prijit. */
+/** Starring only makes sense for things that can be lost. */
 function canFavorite(item) {
   return !item.isTest && !!(recipeOfType(item.lootId, 'DISENCHANT') || recipeOfType(item.lootId, 'REROLL'));
 }
@@ -1023,7 +1026,7 @@ function toggleFavorite(lootId) {
   const set = favSet();
   if (set.has(lootId)) set.delete(lootId);
   else set.add(lootId);
-  try { localStorage.setItem('lootforge.favorites', JSON.stringify([...set])); } catch (_) { /* jen pohodli */ }
+  try { localStorage.setItem('lootforge.favorites', JSON.stringify([...set])); } catch (_) { /* just a convenience */ }
   if (FILTER_SCOPES.includes(state.scope) || state.scope === 'chests') renderGrid(state.scope, itemsIn(state.scope));
   renderActionbar();
   if (!$('#cleanup').hidden) renderCleanup();
@@ -1034,12 +1037,12 @@ function starredWarning(items) {
   return starred.length ? `Includes starred: ${starred.map(nameOf).join(', ')}. ` : '';
 }
 
-/** "Select all" / "Select owned" - jen viditelne, ostre a bez hvezdicky. */
+/** "Select all" / "Select owned" - visible, real and unstarred items only. */
 function selectIn(scope, mode) {
   const list = itemsIn(scope);
-  if (state.rerollMode) setRerollMode(false);   // "vybrat vse" do trislotoveho zasobniku nepatri
+  if (state.rerollMode) setRerollMode(false);   // "select all" does not belong in a three-slot tray
   state.selected.clear();
-  // jen to, co je po filtru videt - "vybrat vse" nesmi potichu vzit i skryte
+  // only what the filter shows - "select all" must not quietly take hidden items too
   const real = visibleIn(scope, list).filter((i) => !i.isTest && !isFavorite(i.lootId));
   if (mode === 'all') real.forEach((i) => state.selected.add(i.lootId));
   if (mode === 'owned') real.filter(alreadyOwned).forEach((i) => state.selected.add(i.lootId));
@@ -1047,13 +1050,13 @@ function selectIn(scope, mode) {
   renderActionbar();
 }
 
-// --- uklid inventare -------------------------------------------------------
+// --- inventory clean up ----------------------------------------------------
 
 /*
- * Pravidla, podle kterych se hromadne rozklada. Kazde vraci, kolik kusu z
- * polozky rozlozit (0 = nechat). Pravidla se neprekryvaji (vlastnene /
- * nevlastnene), takze zadny kus se nepocita dvakrat. Testovaci polozky a veci
- * bez receptu DISENCHANT do uklidu nikdy nejdou (cleanupPlan).
+ * The rules bulk disenchanting follows. Each returns how many pieces of an item
+ * to disenchant (0 = keep). The rules do not overlap (owned / not owned), so no
+ * piece is counted twice. Test items and items without a DISENCHANT recipe never
+ * take part in clean up (cleanupPlan).
  */
 const CLEANUP_RULES = [
   { id: 'champ-owned', on: true, title: 'Champion shards for champions you own',
@@ -1086,7 +1089,7 @@ function cleanupRules() {
   return state.cleanup.rules;
 }
 
-/** Co by uklid rozlozil: pravidla s polozkami, kusy a esenci. */
+/** What clean up would disenchant: rules with their items, counts and essence. */
 function cleanupPlan() {
   const rules = cleanupRules();
   const candidates = state.items.filter((i) => !i.isTest && !isFavorite(i.lootId) && recipeOfType(i.lootId, 'DISENCHANT'));
@@ -1162,7 +1165,7 @@ function renderCleanup() {
 function toggleCleanupRule(id, on) {
   const rules = cleanupRules();
   rules[id] = !!on;
-  try { localStorage.setItem('lootforge.cleanup', JSON.stringify(rules)); } catch (_) { /* jen pohodli */ }
+  try { localStorage.setItem('lootforge.cleanup', JSON.stringify(rules)); } catch (_) { /* just a convenience */ }
   renderCleanup();
 }
 
@@ -1187,7 +1190,7 @@ async function runCleanup() {
   await runDisenchant(plan.chosen.map((e) => ({ item: e.item, count: e.count })), 'Cleaned up');
 }
 
-// --- vlastnene skiny na sampiona ------------------------------------------
+// --- skins owned for a champion -------------------------------------------
 
 async function loadOwnedSkins() {
   try {
@@ -1197,13 +1200,13 @@ async function loadOwnedSkins() {
     state.ownedSkins = data.byChampion || {};
     state.champions = data.champions || {};
     chromaCache.clear();
-  } catch (_) { /* bez skinu appka funguje dal, jen je neukaze */ }
+  } catch (_) { /* without the skins the app still works, it just cannot show them */ }
 }
 
 /**
- * Id sampiona z loot polozky nebo dropu. Ostre shardy ho maji ve storeItemId,
- * dropy z craftu jen v lootId (CHAMPION_RENTAL_110, CHAMPION_110), simulator
- * v TEST_CHAMPION_110.
+ * Champion id from a loot item or a drop. Real shards carry it in storeItemId,
+ * drops from a craft only in the lootId (CHAMPION_RENTAL_110, CHAMPION_110),
+ * the simulator in TEST_CHAMPION_110.
  */
 function championIdOf(x) {
   if (!x) return 0;
@@ -1214,7 +1217,7 @@ function championIdOf(x) {
   return m ? Number(m[1]) : 0;
 }
 
-/** Id skinu ze shardu nebo dropu: storeItemId, CHAMPION_SKIN(_RENTAL)_40066, TEST_SKIN_40066. */
+/** Skin id from a shard or a drop: storeItemId, CHAMPION_SKIN(_RENTAL)_40066, TEST_SKIN_40066. */
 function skinIdOf(x) {
   if (!x || !/SKIN/.test(String(x.type || ''))) return 0;
   if (x.storeItemId > 1000) return x.storeItemId;
@@ -1223,8 +1226,8 @@ function skinIdOf(x) {
 }
 
 /**
- * Sampion skinu (id skinu / 1000). Jen u skinu - u champion shardu skiny
- * neukazujeme: kdo sampiona nema, nemuze na nej mit ani skin.
+ * The skin's champion (skin id / 1000). Skins only - champion shards do not show
+ * skins: whoever does not own the champion cannot own a skin for them either.
  */
 function skinChampionOf(x) {
   const skin = skinIdOf(x);
@@ -1232,9 +1235,9 @@ function skinChampionOf(x) {
 }
 
 /**
- * Cely splash art. V lootu je jen "centered" (priblizeny, rozmazane pozadi);
- * "uncentered" je cela kresba. Odvozeni sedi u vsech 2149 skinu League
- * (overeno proti skins.json), takze nezavisi na serveru.
+ * The full splash art. Loot only carries the "centered" one (zoomed in, blurred
+ * background); "uncentered" is the whole artwork. The derivation holds for all
+ * 2149 League skins (checked against skins.json), so it does not need the server.
  */
 function fullSplashOf(path) {
   return String(path || '').replace(/_splash_centered_/i, '_splash_uncentered_');
@@ -1244,7 +1247,7 @@ function championName(id) {
   return state.champions[id] || '';
 }
 
-/** Ma hrac tenhle skin? (kolekce je presnejsi, ownedSkins staci jako zaloha) */
+/** Does the player own this skin? (the collection is exact, ownedSkins is the fallback) */
 function ownsSkin(skinId) {
   const data = state.collection.data;
   if (data) return data.skins.some((x) => x.id === skinId);
@@ -1257,7 +1260,7 @@ function ownedSkinsFor(championId) {
 
 const skinsWord = (n) => plural(n, 'skin', 'skins', 'skins');
 
-/** Maly prehled na kartu: prekryvajici se kolecka a pocet. Nic, kdyz skin neni. */
+/** A small summary for a card: overlapping circles and a count. Nothing without skins. */
 function skinsChipHtml(championId) {
   const skins = ownedSkinsFor(championId);
   if (!skins.length) return '';
@@ -1270,15 +1273,16 @@ function skinsChipHtml(championId) {
 }
 
 /**
- * Galerie skinu - do potvrzeni pred odemknutim, do odhaleni a do detailu.
- * opts.current = id skinu, o kterem je rec (zvyrazni se, kdyz ho uz mas)
- * opts.clickable = v detailu jde kliknutim zobrazit splash daneho skinu
- * opts.max = kolik ukazat, zbytek jako "+N dalsich"
+ * The skin gallery - used in the confirmation before unlocking, in the reveal
+ * and in the details.
+ * opts.current = the skin in question (highlighted when already owned)
+ * opts.clickable = in the details, clicking shows that skin's splash
+ * opts.max = how many to show, the rest as "+N more"
  */
 function skinsGalleryHtml(championId, champName, opts) {
   const o = opts || {};
   const skins = ownedSkinsFor(championId);
-  // jmeno bez sklonovani ("Janna: tvoje skiny") - "skiny na Janna" by nebylo cesky
+  // the champion's plain name reads best here ("Janna: your skins")
   const name = escapeHtml(champName || championName(championId) || 'Champion');
   if (!skins.length) {
     return `<div class="skins-owned"><div class="skins-none">${name}: you don't own any skins yet.</div></div>`;
@@ -1298,12 +1302,12 @@ function skinsGalleryHtml(championId, champName, opts) {
   </div>`;
 }
 
-// --- detail: cely splash + skiny na sampiona -----------------------------
+// --- details: full splash + the champion's skins -------------------------
 
 let detailCtx = null;
-let lastDrops = [];   // dropy z posledniho odhaleni, at jde detail otevrit i z nich
+let lastDrops = [];   // drops from the last reveal, so the details can be opened from them too
 
-/** Detail skin shardu z inventare (karta v tabu). */
+/** Details of a skin shard from the inventory (a card in a tab). */
 function openDetail(lootId) {
   const item = state.byId.get(lootId);
   if (!item || !skinIdOf(item)) return null;
@@ -1317,7 +1321,7 @@ function openDetail(lootId) {
   });
 }
 
-/** Detail skinu z odhaleni - kdyz uz je v inventari, i s akcemi. */
+/** Details of a skin from the reveal - with actions when it is already in the inventory. */
 function openDetailFromDrop(drop) {
   if (!drop || !skinIdOf(drop)) return null;
   if (drop.lootId && state.byId.get(drop.lootId)) return openDetail(drop.lootId);
@@ -1335,8 +1339,8 @@ async function showDetail(ctx) {
   detailCtx = ctx;
   ctx.previewId = 0;
   ctx.splash = fullSplashOf(ctx.centered);
-  // napred cely splash odvozeny z lootu, pak priblizeny; miniatura jen jako
-  // posledni zachrana (a bez nafouknuti - viz .is-fallback)
+  // first the full splash derived from the loot, then the zoomed one; the tile is
+  // only a last resort (and not stretched - see .is-fallback)
   showArt([ctx.splash, ctx.centered], ctx.tile, ctx, null);
   refreshChromas(ctx);
   renderDetail(ctx);
@@ -1347,23 +1351,23 @@ async function showDetail(ctx) {
     const res = await fetch('/api/skin/' + ctx.skinId);
     if (!res.ok) return ctx;
     const art = await res.json();
-    if (detailCtx !== ctx) return ctx;   // mezitim otevreny jiny detail
+    if (detailCtx !== ctx) return ctx;   // another detail was opened in the meantime
     ctx.championName = art.championName || '';
     if (!ctx.rarity || ctx.rarity === 'DEFAULT') ctx.rarity = art.rarity || 'DEFAULT';
-    // drop bez splashPath (napr. ze simulatoru) - dozvime se ho az ze serveru
+    // a drop without splashPath (from the simulator, say) - the server tells us
     if (!ctx.splash && art.splash) {
       ctx.splash = '/lcu' + art.splash;
       if (!ctx.previewId) showArt([ctx.splash], ctx.tile, ctx, null);
     }
     renderDetail(ctx);
-  } catch (_) { /* jmeno sampiona bude chybet, obrazek uz je */ }
+  } catch (_) { /* the champion name will be missing, the image is already there */ }
   await ctx.chromaLoad;
   return ctx;
 }
 
 /**
- * Zkusi zdroje poporade a ukaze prvni, ktery se nacte. Do te doby je videt
- * rozmazana miniatura. Kdyz nic nevyjde, miniatura se ukaze bez roztazeni.
+ * Tries the sources in order and shows the first one that loads. Until then the
+ * blurred tile is visible. When none of them works, the tile shows unstretched.
  */
 function showArt(sources, tile, ctx, preview) {
   const img = $('#detail-img');
@@ -1383,14 +1387,14 @@ function showArt(sources, tile, ctx, preview) {
   art.classList.remove('is-fallback');
 
   const useTile = () => {
-    if (tile) img.src = tile; else img.removeAttribute('src');   // ne src = '' (dotaz na stranku)
+    if (tile) img.src = tile; else img.removeAttribute('src');   // not src = '' (that requests the page itself)
     img.dataset.want = tile || '';
     art.classList.remove('is-loading');
     art.classList.add('is-fallback');
   };
 
   if (!list.length) return useTile();
-  if (typeof Image !== 'function') {   // bez prohlizece (testy): rovnou prvni zdroj
+  if (typeof Image !== 'function') {   // no browser (tests): take the first source right away
     img.src = list[0];
     img.dataset.want = list[0];
     return;
@@ -1413,11 +1417,11 @@ function showArt(sources, tile, ctx, preview) {
   })(0);
 }
 
-// --- video prohlidka (SkinSpotlights) -------------------------------------
+// --- video preview (SkinSpotlights) ---------------------------------------
 
 function stopVideo() {
   const box = $('#detail-video');
-  if (box) box.innerHTML = '';   // odebrat iframe = zastavit prehravani
+  if (box) box.innerHTML = '';   // removing the iframe = playback stops
   $('#detail-art').classList.remove('is-video');
   if (detailCtx) detailCtx.videoOn = false;
 }
@@ -1426,7 +1430,7 @@ async function toggleVideo() {
   const ctx = detailCtx;
   if (!ctx) return;
   if (ctx.videoOn) { stopVideo(); renderDetail(ctx); return; }
-  if (!youtubeKey()) return;   // bez klice je tlacitko obycejny odkaz na YouTube
+  if (!youtubeKey()) return;   // without a key the button is an ordinary link to YouTube
   closeChroma(ctx);
 
   const name = shownSkinName(ctx);
@@ -1450,7 +1454,7 @@ async function toggleVideo() {
     box.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${data.videoId}?autoplay=1&rel=0&modestbranding=1"
       title="${escapeHtml(data.title || name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
   } else {
-    // nenaslo se nebo API odmitlo - aspon odkaz, zadne vyskakovaci okno
+    // nothing found or the API refused - at least a link, no popup window
     box.innerHTML = `<div class="detail-video-miss">
       <p>${escapeHtml(failure || `No SkinSpotlights video found for "${name}".`)}</p>
       <a class="big-btn" href="${escapeHtml(spotlightSearchUrl(name))}" target="_blank" rel="noopener">Search on YouTube</a>
@@ -1461,21 +1465,22 @@ async function toggleVideo() {
   renderDetail(ctx);
 }
 
-/** Jmeno skinu, ktery je prave videt (shard, nebo tvuj skin v nahledu). */
+/** The name of the skin currently on screen (the shard, or your skin in preview). */
 function shownSkinName(ctx) {
   const shown = ctx.previewId ? ownedSkinsFor(ctx.championId).find((x) => x.id === ctx.previewId) : null;
   return shown ? shown.name : ctx.name;
 }
 
 /*
- * Video prohlidky od SkinSpotlights. Stranky YouTube se NESTAHUJI (podminky
- * YouTube to zakazuji). Bez klice je tlacitko odkaz na hledani, s vlastnim
- * klicem hrace se hleda pres oficialni YouTube Data API primo z prohlizece.
- * Klic ani jmeno skinu nejdou nikam jinam nez Googlu.
+ * Skin spotlights by SkinSpotlights. YouTube pages are NEVER scraped (their
+ * terms forbid it). Without a key the button is a link to a search; with the
+ * player's own key the search goes through the official YouTube Data API,
+ * straight from the browser. Neither the key nor the skin name goes anywhere
+ * but Google.
  */
 
-const SPOTLIGHT_CHANNEL = 'UC0NwzCHb8Fg89eTB5eYX17Q';   // SkinSpotlights (id kanalu, ne jmeno)
-const SPOTLIGHT_TTL = 30 * 86400000;                     // podminky API: data z API max. 30 dni
+const SPOTLIGHT_CHANNEL = 'UC0NwzCHb8Fg89eTB5eYX17Q';   // SkinSpotlights (the channel id, not the name)
+const SPOTLIGHT_TTL = 30 * 86400000;                     // API terms: data from the API may be kept for 30 days
 
 function youtubeKey() {
   try { return String(localStorage.getItem('lootforge.ytKey') || '').trim(); } catch (_) { return ''; }
@@ -1492,9 +1497,10 @@ function normalizeTitle(text) {
 }
 
 /**
- * Z nalezenych videi vybere prohlidku daneho skinu: jen kanal SkinSpotlights,
- * nazev musi obsahovat jmeno skinu a "skin spotlight". Hotovy skin ma prednost
- * pred PBE nahledem (pre-release), ten byva nedodelany.
+ * Picks the spotlight for a skin out of the search results: the SkinSpotlights
+ * channel only, and the title has to contain both the skin name and
+ * "skin spotlight". A finished skin beats a PBE preview (pre-release), which
+ * tends to be unfinished.
  */
 function pickSpotlight(videos, skinName) {
   const want = normalizeTitle(skinName);
@@ -1508,7 +1514,7 @@ function pickSpotlight(videos, skinName) {
   return candidates[0] || null;
 }
 
-/** API vraci titulky s HTML entitami ("Kai&#39;Sa"). */
+/** The API returns titles with HTML entities ("Kai&#39;Sa"). */
 function decodeEntities(s) {
   return String(s || '').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
@@ -1534,15 +1540,15 @@ async function findSpotlight(skinName) {
   }));
 
   const pick = pickSpotlight(videos, skinName);
-  if (!pick) return { videoId: null };   // neuspech se nepamatuje - skin muze dostat video pozdeji
+  if (!pick) return { videoId: null };   // a miss is not remembered - the skin may get a video later
   const result = { videoId: pick.id, title: pick.title, at: Date.now() };
-  // jen uspechy a jen 30 dni; kazde hledani stoji 100 jednotek z denni kvoty
+  // hits only, and only for 30 days; every search costs 100 units of the daily quota
   cache[cacheKey] = result;
   const keep = Object.entries(cache)
     .filter(([, v]) => v && Date.now() - v.at < SPOTLIGHT_TTL)
     .sort((a, b) => b[1].at - a[1].at)
     .slice(0, 300);
-  try { localStorage.setItem('lootforge.ytCache', JSON.stringify(Object.fromEntries(keep))); } catch (_) { /* jen cache */ }
+  try { localStorage.setItem('lootforge.ytCache', JSON.stringify(Object.fromEntries(keep))); } catch (_) { /* just a cache */ }
   return result;
 }
 
@@ -1557,7 +1563,7 @@ function renderDetail(ctx) {
     if (isShard(item) && alreadyOwned(item)) tags.push('<span class="is-owned"><i></i>OWNED</span>');
   }
 
-  // akce jen u veci, ktere jsou v inventari
+  // actions only for things that are in the inventory
   const actions = [];
   if (item) {
     const id = item.lootId;
@@ -1575,7 +1581,7 @@ function renderDetail(ctx) {
     const videoLabel = ctx.videoLoading ? 'Searching…' : ctx.videoOn ? 'Back to splash' : 'Video preview';
     actions.unshift(`<button class="ghost-btn video-btn ${ctx.videoOn ? 'is-on' : ''}" data-video ${ctx.videoLoading ? 'disabled' : ''} title="Skin spotlight by SkinSpotlights (YouTube)"><i></i>${videoLabel}</button>`);
   } else {
-    // bez API klice obycejny odkaz do nove zalozky - YouTube se nestahuje
+    // without an API key an ordinary link in a new tab - YouTube is not scraped
     actions.unshift(`<a class="ghost-btn video-btn" href="${escapeHtml(spotlightSearchUrl(shownSkinName(ctx)))}" target="_blank" rel="noopener" title="Skin spotlight by SkinSpotlights - opens YouTube"><i></i>Video preview</a>`);
   }
 
@@ -1597,15 +1603,15 @@ function renderDetail(ctx) {
     : '';
 }
 
-// --- chromy ------------------------------------------------------------
+// --- chromas -----------------------------------------------------------
 
 let summonerId = 0;
 const chromaCache = new Map();   // skinId -> [chroma]
 
 /**
- * Chromy skinu i s vlastnictvim - primo od klienta, jednim dotazem na skin
- * (/lol-champions/v1/inventories/{summoner}/champions/{champ}/skins/{skin}/chromas).
- * Overeno: vlastnictvi sedi s inventarem, bez pujcenych.
+ * A skin's chromas including ownership - straight from the client, one request
+ * per skin (/lol-champions/v1/inventories/{summoner}/champions/{champ}/skins/{skin}/chromas).
+ * Verified: ownership matches the inventory, rentals excluded.
  */
 async function loadChromas(skinId) {
   if (chromaCache.has(skinId)) return chromaCache.get(skinId);
@@ -1620,7 +1626,7 @@ async function loadChromas(skinId) {
       name: (String(c.name || '').match(/\(([^)]+)\)\s*$/) || [])[1] || c.name,
       fullName: c.name,
       img: c.chromaPath ? '/lcu' + c.chromaPath : '',
-      // barvy jdou do atributu style - pustit jen skutecne hex barvy
+      // the colours go into a style attribute - let only real hex colours through
       colors: (c.colors || []).filter((x) => /^#[0-9a-f]{3,8}$/i.test(x)),
       owned: !!o.owned && !(o.rental && o.rental.rented) && !o.loyaltyReward,
       obtainable: c.stillObtainable !== false,
@@ -1630,11 +1636,11 @@ async function loadChromas(skinId) {
   return list;
 }
 
-/** Nacte chromy prave zobrazeneho skinu (shard, nebo tvuj skin v nahledu). */
+/** Loads the chromas of the skin on screen (the shard, or your skin in preview). */
 function refreshChromas(ctx) {
   const skinId = ctx.previewId || ctx.skinId;
   ctx.chromaSkin = skinId;
-  ctx.chromas = null;   // null = nacita se
+  ctx.chromas = null;   // null = still loading
   closeChroma(ctx);
   const load = loadChromas(skinId)
     .then((list) => list, () => [])
@@ -1655,9 +1661,9 @@ function swatchCss(colors) {
 }
 
 /**
- * Poznamka pod chromou. `stillObtainable: false` znamena "neni v obchode se
- * skiny" - jenze prave ted muze byt v mythic shopu, a rict u ni "no longer
- * available" by bylo matouci.
+ * The note under a chroma. `stillObtainable: false` means "not in the skin
+ * store" - but it may be in the Mythic Shop right now, and saying "no longer
+ * available" would be misleading.
  */
 function chromaNote(c) {
   if (c.owned) return '';
@@ -1686,7 +1692,7 @@ function chromasHtml(ctx) {
   </div>`;
 }
 
-/** Klik na chromu: model v puvodni velikosti nad ztlumenym splashem (obrazky maji jen 270x303). */
+/** Clicking a chroma: the model at its own size over a dimmed splash (the images are only 270x303). */
 function showChroma(chromaId) {
   const ctx = detailCtx;
   if (!ctx || !ctx.chromas) return;
@@ -1714,7 +1720,7 @@ function closeChroma(ctx) {
   $('#detail-art').classList.remove('is-chroma');
 }
 
-/** Klik na skin v galerii ukaze jeho splash; znovu (nebo Zpet) vrati puvodni. */
+/** Clicking a skin in the gallery shows its splash; clicking again (or Back) returns. */
 function previewSkin(skinId) {
   const ctx = detailCtx;
   if (!ctx) return;
@@ -1751,7 +1757,7 @@ async function loadShop() {
   state.shop.loading = true;
   state.shop.error = null;
   renderShop();
-  // bez kolekce bychom u chrom nevedeli, jestli hrac ma jejich skin
+  // without the collection we would not know whether the player owns a chroma's skin
   if (!state.collection.data && !state.collection.loading) loadCollection().catch(() => {});
   try {
     const res = await fetch('/api/mythic-shop');
@@ -1759,14 +1765,14 @@ async function loadShop() {
     const data = await res.json();
     state.shop.stores = data.stores || [];
 
-    // testovaci nabidka, at jde nakup vyzkouset bez utraceni esence
+    // a test offer, so buying can be tried without spending essence
     if (globalThis.TestChest && testItemsOn()) {
       try {
         if (!testOffer) testOffer = await TestChest.shopOffer();
         state.shop.stores = state.shop.stores.concat([{
           id: 'TEST_SHOP', label: 'Test offer (simulated)', endTime: null, entries: [testOffer], isTest: true,
         }]);
-      } catch (_) { /* bez dat z klienta testovaci nabidka nebude */ }
+      } catch (_) { /* without client data there is no test offer */ }
     }
     state.shop.loadedAt = Date.now();
   } catch (err) {
@@ -1781,7 +1787,7 @@ function shopEntries() {
   return state.shop.stores.flatMap((st) => st.entries);
 }
 
-/** "konci za 2 d 5 h" / "konci za 3 h 12 min" */
+/** "ends in 2 d 5 h" / "ends in 3 h 12 min" */
 function endsIn(iso) {
   if (!iso) return '';
   const ms = Date.parse(iso) - Date.now();
@@ -1830,7 +1836,7 @@ function shopCardHtml(e) {
   else if (!enough) action = `<button disabled>Need ${(e.price - me).toLocaleString('en-US')} more</button>`;
   else action = `<button data-action="buy:${escapeHtml(e.catalogEntryId)}">Buy</button>`;
 
-  // chroma bez skinu je k nicemu - at to hrac vidi driv, nez utrati esenci
+  // a chroma without its skin is useless - show that before the player spends essence
   const needsSkin = e.kind === 'chroma' && e.skinId
     ? `<div class="shop-need ${ownsSkin(e.skinId) ? 'is-ok' : 'is-missing'}">${ownsSkin(e.skinId)
       ? `You own ${escapeHtml(e.skinName || 'the skin')}`
@@ -1856,10 +1862,10 @@ function shopCardHtml(e) {
 }
 
 /**
- * Druha (a posledni) cesta, kterou appka na uctu neco meni - vedle craft().
- * Testovaci nabidka se odchyti tady, driv nez cokoliv odejde. Na vysledek
- * nakupu se ceka, uspech se nehlasi naslepo: kdyby se nepotvrdil, hrac by
- * zkusil koupit znovu.
+ * The second (and last) path through which the app changes anything on the
+ * account - next to craft(). The test offer is caught here, before anything is
+ * sent. The result is waited for and success is never reported blindly: if it
+ * were, the player might buy the same thing twice.
  */
 async function purchase(entry) {
   if (entry.isTest) {
@@ -1873,8 +1879,8 @@ async function purchase(entry) {
     catalogEntryId: entry.catalogEntryId,
     quantity: 1,
     paymentOptions: [entry.paymentKey],
-    // jednotka ze schematu klienta nevyplyva; 15000 je bezpecne v obou vykladech
-    // (15 s v ms, nebo jen dlouha horni mez v s) - odpoved prijde, jakmile nakup dobehne
+    // the unit does not follow from the client's schema; 15000 is safe either way
+    // (15 s in ms, or just a long upper bound in s) - the answer arrives once the purchase finishes
     purchaseTimeOut: 15000,
   };
   const created = await lcu('/lol-shoppefront/v1/purchases', {
@@ -1920,7 +1926,7 @@ async function buyOffer(catalogEntryId) {
       splash: entry.splash ? '/lcu' + entry.splash : '',
       rarity: entry.rarity || 'DEFAULT', type: entry.kind.toUpperCase(), count: 1, lootId: entry.catalogEntryId,
     };
-    // vis, co kupujes - obrad, zadne toceni
+    // you can see what you are buying - a ceremony, no spinning
     await revealDrops([drop], entry.isTest ? 'TEST - bought, account unchanged' : 'Purchased', { unlock: true });
   });
   loadShop();
@@ -1929,8 +1935,8 @@ async function buyOffer(catalogEntryId) {
 // --- reveal -------------------------------------------------------------
 
 let skipAnim = false;
-let testShards = null;   // vylosuje se jednou za nacteni stranky
-let testOffer = null;    // testovaci nabidka v mythic shopu
+let testShards = null;   // rolled once per page load
+let testOffer = null;    // the test offer in the Mythic Shop
 let gateTimer = null;
 
 function showReveal(title) {
@@ -1948,16 +1954,16 @@ function showReveal(title) {
   stop.textContent = 'Stop after this batch';
   reveal.hidden = false;
 
-  // brana se rozjede - at to nevyskoci jako obycejny popup. Behem te vteriny
-  // stejne bezi craft, takze se ceka na klienta pod animaci.
-  document.body.classList.add('reveal-open');   // pod odhalenim se nema rolovat
+  // the gate rolls out - so it does not pop up like an ordinary dialog. The craft
+  // runs during that second anyway, so the wait for the client hides under it.
+  document.body.classList.add('reveal-open');   // nothing should scroll under the reveal
   reveal.classList.add('is-entering');
   clearTimeout(gateTimer);
   gateTimer = setTimeout(() => reveal.classList.remove('is-entering'), 900);
   if (globalThis.Reel) Reel.Sfx.gateOpen();
 }
 
-/** Zavre odhaleni branou, ne skokem. */
+/** Closes the reveal through the gate, not with a jump. */
 function closeReveal() {
   const reveal = $('#reveal');
   if (reveal.hidden) return;
@@ -1975,12 +1981,12 @@ function closeReveal() {
 }
 
 /**
- * Ukaze odmeny. Rezim se vybira podle toho, kolik toho padlo:
- *   1 vec        - jedna velka ruleta
- *   2-5 veci     - tolik pasu nad sebou, kazdy dojede o chvili pozdeji
- *   6+ veci      - kaskada: mrizka rubem nahoru, karty se postupne otaceji
- *   opts.unlock  - obrad odemknuti (nic se netoci, vysledek je predem jasny)
- * Bez `opts` se karty jen vysypou - to staci na hromadne rozkladani.
+ * Shows the rewards. The mode depends on how much dropped:
+ *   1 item       - one big roulette
+ *   2-5 items    - that many reels, each landing a moment later
+ *   6+ items     - a cascade: a grid face down, cards turning one by one
+ *   opts.unlock  - the unlock ceremony (nothing spins, the result is known)
+ * Without `opts` the cards just drop in - enough for bulk disenchanting.
  */
 async function revealDrops(drops, title, opts) {
   const wrap = $('#reveal-cards');
@@ -2020,7 +2026,7 @@ async function revealDrops(drops, title, opts) {
       await Reel.cascade(drops, host);
     }
 
-    // vic veci z beden: po chvilce misto animace prehledny souhrn vseho, co padlo
+    // several things from chests: after a moment the animation gives way to a summary
     if (opts.reel && drops.length > 1) {
       await sleep(skipAnim ? 0 : Reel.Motion.t(1200));
       $('#reveal-skip').hidden = true;
@@ -2049,20 +2055,20 @@ async function revealDrops(drops, title, opts) {
   $('#reveal-close').hidden = false;
 }
 
-/** Cesky tvar podle poctu: 1 shard, 2 shardy, 5 shardu. */
+/** English plural: 1 shard, 2 shards. */
 function plural(n, one, few, many) {
   if (n === 1) return one;
   return n >= 2 && n <= 4 ? few : many;
 }
 
 /**
- * Souhrn vseho, co padlo. Stejne veci se slouci (esence z deseti beden =
- * jedna karta), serazene od nejvzacnejsiho. Nahore soucty podle druhu.
+ * A summary of everything that dropped. Identical things are merged (essence
+ * from ten chests = one card) and sorted from the rarest. Totals by kind on top.
  */
 function summaryHtml(drops) {
   const merged = new Map();
   for (const d of drops) {
-    // podle nazvu, ne lootId: simulator dava vsem menam stejne lootId
+    // by name, not lootId: the simulator gives every currency the same lootId
     const key = `${d.type}|${d.name}|${d.rarity}`;
     const prev = merged.get(key);
     if (prev) prev.count += d.count || 1;
@@ -2124,16 +2130,16 @@ async function popIn(drops, wrap) {
 }
 
 /**
- * Vypln pasu rulety. Bere hracuv vlastni loot, at kolem probihaji veci,
- * ktere zna - a doplni to tim, co prave padlo.
+ * Filler for the reel. It takes the player's own loot so things they know fly
+ * past - and tops it up with what just dropped.
  */
 function fillerPool(drops) {
   const mine = state.items
     .filter((i) => !i.isTest && imgUrl(i) && !isIcon(i))
     .map((i) => ({ name: nameOf(i), img: imgUrl(i), rarity: i.rarity || 'DEFAULT' }));
 
-  // stejny obrazek jen jednou: sampion a jeho shard sdileji splash a na pasu
-  // by se pak dva shodne kousky mohly potkat vedle sebe
+  // the same image only once: a champion and their shard share a splash, and two
+  // identical tiles could end up next to each other on the reel
   const seen = new Set();
   const pool = [];
   for (const tile of mine.concat(drops.map((d) => ({ name: d.name, img: d.img, rarity: d.rarity })))) {
@@ -2165,10 +2171,10 @@ function logDrops(drops) {
 }
 
 /*
- * Statistiky ziji jen v localStorage tohohle prohlizece ("gamba.stats").
- * Cisla se prictou, objekty (esence, rarity, bedny) se prictou po klicich.
- * Starsi zaznam { opened, disenchanted } se nacte beze ztraty.
- * Testovaci polozky sem nikdy nezapisuji - volajici to hlidaji.
+ * The statistics live only in this browser's localStorage ("lootforge.stats").
+ * Numbers are added up, objects (essence, rarities, chests) are added per key.
+ * An older record { opened, disenchanted } is read without losing anything.
+ * Test items never write here - the callers make sure of that.
  */
 const STATS_MAPS = ['chests', 'rarity', 'kinds', 'gained', 'spent'];
 
@@ -2212,13 +2218,13 @@ const KIND_LABEL = {
   ward: 'ward shards', emote: 'emotes', icon: 'icons', other: 'other',
 };
 
-/** Otevrene bedny do statistik: kolik, jake, a co z nich padlo. */
+/** Opened chests for the statistics: how many, which ones, and what they gave. */
 function recordChests(chestName, times, drops) {
   const rarity = {};
   const kinds = {};
   for (const d of drops) {
     const kind = kindOf(d);
-    // u men je count mnozstvi esence, ne pocet dropu
+    // for currencies the count is an amount of essence, not a number of drops
     const n = kind === 'currency' ? 1 : (d.count || 1);
     kinds[kind] = (kinds[kind] || 0) + n;
     if (kind === 'skin') rarity[d.rarity || 'DEFAULT'] = (rarity[d.rarity || 'DEFAULT'] || 0) + n;
@@ -2267,7 +2273,7 @@ function pct(n, total) {
   return total ? Math.round((n / total) * 1000) / 10 : 0;
 }
 
-/** Rarity skin shardu z beden: pruh slozeny z barev rarit + legenda. */
+/** Rarity of skin shards from chests: a bar of rarity colours plus a legend. */
 function rarityChartHtml(rarity) {
   const rows = RARITY_ORDER.map((r) => [r, rarity[r] || 0]).filter(([, n]) => n > 0);
   const total = rows.reduce((n, [, x]) => n + x, 0);
@@ -2305,7 +2311,7 @@ function chestsChartHtml(chests) {
   return barsHtml('Chests opened', rows);
 }
 
-/** Stahne statistiky a historii jako JSON (appka bezi lokalne, stahovani funguje). */
+/** Downloads the statistics and history as JSON (the app runs locally, so downloads work). */
 function exportStats() {
   const data = { exported: new Date().toISOString(), stats: readStats(), history: readStore('lootforge.history', []) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2317,7 +2323,7 @@ function exportStats() {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-// --- kolekce -------------------------------------------------------------
+// --- collection ----------------------------------------------------------
 
 const COLLECTION_KINDS = [
   ['skins', 'Skins', 'skins'],
@@ -2356,14 +2362,14 @@ function setCollection(key, value) {
   saveUi();
 }
 
-/** Polozky zvoleneho druhu po hledani a razeni. */
+/** Items of the chosen kind after searching and sorting. */
 function collectionItems() {
   const col = state.collection;
   const data = col.data;
   if (!data) return [];
   const names = data.championNames || {};
   const q = fold(col.q).trim();
-  // presne jmeno sampiona = jen jeho veci ("Vi" nema vratit Viega ani Victorious skiny)
+  // an exact champion name = only their things ("Vi" must not return Viego or Victorious skins)
   const champId = q && col.kind !== 'champions'
     ? Number(Object.keys(names).find((id) => fold(names[id]) === q)) || 0
     : 0;
@@ -2403,7 +2409,7 @@ function renderCollection() {
     </button>`;
   }).join('');
 
-  // razeni a rarita jen tam, kde davaji smysl
+  // sorting and rarity only where they make sense
   const sortSel = $('#col-sort');
   const opts = [['new', 'Newest'], ['old', 'Oldest'], ['name', 'Name']];
   if (col.kind === 'skins') opts.push(['rarity', 'Rarity']);
@@ -2444,7 +2450,7 @@ function collectionCardHtml(x, kind, names) {
   </div>`;
 }
 
-/** Detail skinu z kolekce - stejny jako u shardu, jen bez akci. */
+/** Skin details from the collection - the same as for a shard, only without actions. */
 function openCollectionSkin(skinId, chromaId) {
   const data = state.collection.data;
   const sk = data && data.skins.find((x) => x.id === skinId);
@@ -2458,8 +2464,8 @@ function openCollectionSkin(skinId, chromaId) {
 }
 
 /**
- * Nahled skinu, ktery hrac nemusi vlastnit - pouziva ho obchod. Jmeno, raritu
- * a celou kresbu doda server z hernich dat (/api/skin/{id}).
+ * A preview of a skin the player need not own - used by the shop. The name,
+ * rarity and full artwork come from the server's game data (/api/skin/{id}).
  */
 async function openSkinPreview(skinId, chromaId) {
   const own = (state.collection.data ? state.collection.data.skins : []).find((x) => x.id === skinId)
@@ -2469,7 +2475,7 @@ async function openSkinPreview(skinId, chromaId) {
     try {
       const res = await fetch('/api/skin/' + skinId);
       if (res.ok) art = await res.json();
-    } catch (_) { /* nize se to vzda */ }
+    } catch (_) { /* a link is offered below */ }
   }
   if (!art) return toast('This skin has no preview.', true);
 
@@ -2482,7 +2488,7 @@ async function openSkinPreview(skinId, chromaId) {
   return ctx;
 }
 
-/** Chroma z kolekce: detail rodicovskeho skinu s rozkliknutou chromou. */
+/** A chroma from the collection: its skin's details with that chroma opened. */
 function openCollectionChroma(chromaId) {
   const data = state.collection.data;
   const ch = data && data.chromas.find((x) => x.id === chromaId);
@@ -2492,7 +2498,7 @@ function openCollectionChroma(chromaId) {
   return null;
 }
 
-// --- vyber shardu -------------------------------------------------------
+// --- selecting shards ---------------------------------------------------
 
 function toggleSelect(lootId) {
   if (state.rerollMode && !state.selected.has(lootId)) {
@@ -2553,15 +2559,15 @@ function toast(msg, isError) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 4500);
 }
 
-// --- nastaveni a uvodni upozorneni ---------------------------------------
+// --- settings and the first-start notice ---------------------------------
 
-// --- kontrola nove verze ------------------------------------------------------
+// --- update check -------------------------------------------------------------
 
 /*
- * Jednou za 12 hodin se prohlizec zepta GitHubu na posledni release (verejne
- * API, bez prihlaseni, umi CORS). Server s internetem nemluvi. Jde vypnout
- * v Nastaveni. Dokud v package.json neni skutecne repo, server posle
- * repo: null a nic se nekontroluje.
+ * Once every 12 hours the browser asks GitHub for the latest release (public
+ * API, no login, CORS friendly). The server never talks to the internet. It can
+ * be turned off in Settings. Until package.json names a real repository the
+ * server sends repo: null and nothing is checked.
  */
 const UPDATE_EVERY = 12 * 3600000;
 
@@ -2569,7 +2575,7 @@ function updatesOn() {
   try { return localStorage.getItem('lootforge.updates') !== '0'; } catch (_) { return true; }
 }
 
-/** 1.10.0 > 1.9.2; "v" na zacatku a pripona (-beta) se ignoruji. */
+/** 1.10.0 > 1.9.2; a leading "v" and a suffix (-beta) are ignored. */
 function isNewerVersion(latest, current) {
   const parts = (v) => String(v || '').replace(/^v/i, '').split(/[-+]/)[0].split('.').map((x) => Number(x) || 0);
   const a = parts(latest);
@@ -2595,10 +2601,10 @@ async function checkForUpdates(force) {
       repo: app.repo,
       checked: Date.now(),
       latest: String(rel.tag_name || '').replace(/^v/i, ''),
-      // odkaz jen do vlastniho repa - nic, co by podstrcila odpoved
+      // a link into our own repository only - nothing the response could slip in
       url: String(rel.html_url || '').startsWith(releases + '/') ? rel.html_url : releases + '/latest',
     };
-    try { localStorage.setItem('lootforge.update', JSON.stringify(info)); } catch (_) { /* priste znovu */ }
+    try { localStorage.setItem('lootforge.update', JSON.stringify(info)); } catch (_) { /* try again next time */ }
   }
   renderUpdate(info);
   return info;
@@ -2658,17 +2664,17 @@ function saveYoutubeKey(value) {
   try {
     if (key) localStorage.setItem('lootforge.ytKey', key);
     else localStorage.removeItem('lootforge.ytKey');
-  } catch (_) { /* bez localStorage klic nepujde ulozit */ }
+  } catch (_) { /* without localStorage the key cannot be saved */ }
   $('#yt-key').value = key;
   renderKeyStatus();
   if (detailCtx) renderDetail(detailCtx);
 }
 
 async function setTestItems(on) {
-  try { localStorage.setItem('lootforge.testItems', on ? '1' : '0'); } catch (_) { /* jen pohodli */ }
-  state.shop.loadedAt = 0;   // testovaci nabidka v obchode taky
+  try { localStorage.setItem('lootforge.testItems', on ? '1' : '0'); } catch (_) { /* just a convenience */ }
+  state.shop.loadedAt = 0;   // the test offer in the shop as well
   if (!on) {
-    // vyhodit hned, ne az pri dalsim nacteni
+    // drop them right away, not at the next load
     state.items = state.items.filter((i) => !i.isTest);
     state.byId = new Map(state.items.map((i) => [i.lootId, i]));
     for (const id of [...state.selected]) if (!state.byId.has(id)) state.selected.delete(id);
@@ -2682,17 +2688,18 @@ function welcomeAccepted() {
 }
 
 function acceptWelcome() {
-  try { localStorage.setItem('lootforge.welcome', '1'); } catch (_) { /* ukaze se znovu, nevadi */ }
+  try { localStorage.setItem('lootforge.welcome', '1'); } catch (_) { /* it will show up again, no harm done */ }
   $('#welcome').hidden = true;
 }
 
-// --- eventy -------------------------------------------------------------
+// --- events -------------------------------------------------------------
 
-// --- zapamatovany stav UI ----------------------------------------------------
+// --- remembered UI state -----------------------------------------------------
 
 /*
- * Posledni tab, filtry (bez hledaneho textu - ten by po navratu jen matl)
- * a nastaveni kolekce. Reroll rezim ani vyber se neukladaji schvalne.
+ * The last tab, the filters (without the search text - it would only confuse on
+ * return) and the collection settings. Reroll mode and the selection are
+ * deliberately not saved.
  */
 function saveUi() {
   const filters = {};
@@ -2705,7 +2712,7 @@ function saveUi() {
     localStorage.setItem('lootforge.ui', JSON.stringify({
       tab: state.scope, filters, collection: { kind: col.kind, sort: col.sort, rarity: col.rarity },
     }));
-  } catch (_) { /* jen pohodli */ }
+  } catch (_) { /* just a convenience */ }
 }
 
 function restoreUi() {
@@ -2721,7 +2728,7 @@ function restoreUi() {
     f.own = str(saved.own);
     f.sort = str(saved.sort) || 'rarity';
   }
-  // pole ve strance musi ukazovat totez, co filtr
+  // the fields on the page have to show what the filter says
   $$('[data-f][data-scope]').forEach((el) => {
     const f = state.filters[el.dataset.scope];
     if (f && el.dataset.f !== 'q') el.value = f[el.dataset.f] || (el.dataset.f === 'sort' ? 'rarity' : '');
@@ -2746,7 +2753,7 @@ function switchTab(tab) {
   saveUi();
   renderActionbar();
   if (state.scope === 'shop') {
-    // rotace a vlastnictvi se meni - po minute radsi nacist znovu
+    // rotations and ownership change - after a minute reload it
     if (Date.now() - state.shop.loadedAt > 60000) loadShop();
     else renderShop();
     return;
@@ -2769,7 +2776,7 @@ document.addEventListener('click', (e) => {
   const actionBtn = e.target.closest('[data-action]');
   if (actionBtn) {
     e.stopPropagation();
-    // akce z detailu: detail zavrit, at potvrzeni a odhaleni nejsou pod nim
+    // an action from the details: close them, so the confirmation and reveal are not underneath
     if (!$('#detail').hidden) closeDetail();
     const [what, id, arg] = actionBtn.dataset.action.split(':');
     if (what === 'open') openChest(id, Number(arg));
@@ -2782,7 +2789,7 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  // zaskrtavaci kolecko = vyber pro hromadne rozlozeni
+  // the tick circle = selection for bulk disenchanting
   const pick = e.target.closest('[data-pick]');
   if (pick) { toggleSelect(pick.dataset.pick); return; }
 
@@ -2817,7 +2824,7 @@ document.addEventListener('click', (e) => {
 
   const colChamp = e.target.closest('[data-col-champ]');
   if (colChamp) {
-    // sampion -> jeho skiny
+    // champion -> their skins
     const names = (state.collection.data && state.collection.data.championNames) || {};
     state.collection.q = names[colChamp.dataset.colChamp] || '';
     $('#col-search').value = state.collection.q;
@@ -2827,7 +2834,7 @@ document.addEventListener('click', (e) => {
 
   const card = e.target.closest('.card[data-selectable]');
   if (card) {
-    // v rezimu rerollu klik plni sloty; jinak otevre detail
+    // in reroll mode a click fills the slots; otherwise it opens the details
     if (state.rerollMode || !card.dataset.detail) toggleSelect(card.dataset.id);
     else openDetail(card.dataset.id);
   }
@@ -2848,7 +2855,7 @@ function skipAnimation() {
   $('#reveal-skip').hidden = true;
 }
 
-// klik na tmave pozadi zavre odhaleni, ale az kdyz uz je co zavirat
+// a click on the dark background closes the reveal, but only once there is something to close
 $('#reveal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget && !$('#reveal-close').hidden) closeReveal();
 });
@@ -2881,7 +2888,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   if (!$('#reveal').hidden) {
-    // dokud animace bezi, Esc i mezernik ji preskoci; potom zaviraji
+    // while the animation runs, Esc and space skip it; afterwards they close
     const running = $('#reveal-close').hidden;
     if (e.key === 'Escape' || e.key === ' ' || e.code === 'Space') {
       e.preventDefault();
@@ -2927,12 +2934,12 @@ $('#yt-key-save').addEventListener('click', () => saveYoutubeKey($('#yt-key').va
 $('#yt-key-clear').addEventListener('click', () => saveYoutubeKey(''));
 $('#test-items').addEventListener('change', (e) => setTestItems(e.target.checked));
 $('#update-check').addEventListener('change', (e) => {
-  try { localStorage.setItem('lootforge.updates', e.target.checked ? '1' : '0'); } catch (_) { /* jen pohodli */ }
+  try { localStorage.setItem('lootforge.updates', e.target.checked ? '1' : '0'); } catch (_) { /* just a convenience */ }
   if (e.target.checked) checkForUpdates().then(renderUpdateStatus, renderUpdateStatus);
   else $('#update').hidden = true;
 });
 $('#show-welcome').addEventListener('change', (e) => {
-  try { localStorage.setItem('lootforge.welcome', e.target.checked ? '0' : '1'); } catch (_) { /* jen pohodli */ }
+  try { localStorage.setItem('lootforge.welcome', e.target.checked ? '0' : '1'); } catch (_) { /* just a convenience */ }
 });
 $('#welcome-ok').addEventListener('click', acceptWelcome);
 $('#cleanup-open').addEventListener('click', openCleanup);
@@ -2941,7 +2948,7 @@ $('#cleanup-go').addEventListener('click', runCleanup);
 $('#cleanup').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeCleanup(); });
 $('#export-stats').addEventListener('click', exportStats);
 
-// filtry a nastaveni: pole se nekresli znovu, takze neprijdou o fokus
+// filters and settings: the fields are not redrawn, so they keep focus
 function onFieldChange(e) {
   const t = e.target;
   if (!t || !t.closest) return;
@@ -2977,9 +2984,9 @@ $$('[data-select]').forEach((btn) => {
 });
 
 /**
- * Server drzi otevreny SSE kanal a hlasi, kdyz se loot v klientovi zmenil -
- * treba kdyz otevres bednu primo v klientovi. Vraci, jestli se to povedlo;
- * kdyz ne, zbyde puvodni pomale dotazovani.
+ * The server keeps an SSE channel open and reports when the loot changed in the
+ * client - for instance when a chest is opened there. Returns whether it worked;
+ * if not, the slower polling remains.
  */
 function connectLiveUpdates() {
   if (typeof EventSource !== 'function') return false;
@@ -2999,8 +3006,8 @@ function connectLiveUpdates() {
       else { setConnected(false); renderAll(); bootWaiting(); }
     });
 
-    // spojeni se serverem spadlo: bud exe skoncilo, nebo se jen restartuje.
-    // EventSource se znovu pripojuje sam, tady jen zjistit, co se deje.
+    // the connection to the server dropped: either the exe quit, or it is restarting.
+    // EventSource reconnects by itself, here we only find out what is going on.
     stream.addEventListener('error', () => {
       if (!state.busy) checkConnection().then((ok) => { if (ok) loadLoot().catch(() => {}); });
     });
@@ -3011,16 +3018,17 @@ function connectLiveUpdates() {
   }
 }
 
-// --- uvodni obrazovka: pripojovani ke klientovi -------------------------
+// --- connection screen --------------------------------------------------
 
 /*
- * Pres celou appku, dokud neni klient pripojeny a loot nacteny. Faze:
- *   searching - prave hledame (prvni vterina)
- *   waiting   - klient nebezi, poradime, co udelat
- *   connected - animace pripojeni se jmenem hrace, pak zmizi
- *   stopped   - neodpovida ani nas server (exe se zavrel)
- * Kdyz klient pozdeji odpadne, obrazovka se vrati. Behem akce (state.busy)
- * se neukazuje - to resi hromadne smycky samy.
+ * Covers the whole app until the client is connected and the loot is loaded.
+ * Phases:
+ *   searching - looking right now (the first second)
+ *   waiting   - the client is not running, tell the player what to do
+ *   connected - the connection animation with the player's name, then it leaves
+ *   stopped   - not even our server answers (the exe was closed)
+ * If the client drops out later, the screen comes back. It stays away during an
+ * action (state.busy) - the bulk loops handle that themselves.
  */
 const BOOT_TEXT = {
   searching: 'Looking for the League client…',
@@ -3028,7 +3036,7 @@ const BOOT_TEXT = {
   connected: 'Connected',
   stopped: 'LootForge has stopped',
 };
-// cele nazvy trid (ne 'is-' + faze) - css.test.js kontroluje, ze kazda ma pravidlo
+// full class names (not 'is-' + phase) - css.test.js checks every class has a rule
 const BOOT_CLASS = { searching: 'is-searching', waiting: 'is-waiting', connected: 'is-connected', stopped: 'is-stopped' };
 const bootScreen = { phase: 'searching', since: Date.now(), timer: null, leaving: null };
 
@@ -3053,7 +3061,7 @@ function setBootPhase(phase) {
     : 'Start <b>League of Legends</b> and log in. LootForge connects as soon as the client is ready.';
 }
 
-/** Klient nebezi: prvni vterinu jeste "hledame", pak poradime. */
+/** The client is not running: "searching" for the first second, then advice. */
 function bootWaiting() {
   const el = $('#boot');
   if (!el || state.busy) return;
@@ -3064,12 +3072,12 @@ function bootWaiting() {
   bootScreen.timer = setTimeout(() => { if (bootScreen.phase === 'searching' && !state.connected) setBootPhase('waiting'); }, left);
 }
 
-/** Klient je tu a loot nacteny: animace pripojeni a pryc s obrazovkou. */
+/** The client is here and the loot is loaded: play the connection animation and leave. */
 async function bootConnected() {
   const el = $('#boot');
   if (!el || el.hidden || bootScreen.phase === 'connected') return;
   const reduced = !!(globalThis.Reel && Reel.Motion.reduced);
-  // at je hledani aspon chvili videt - okamzite probliknuti vypada jako chyba
+  // let the searching show for a moment - an instant flash looks like a glitch
   const shown = Date.now() - bootScreen.since;
   bootScreen.phase = 'connected';
   if (!reduced && shown < 700) await sleep(700 - shown);
@@ -3078,7 +3086,7 @@ async function bootConnected() {
   try {
     const me = await lcu('/lol-summoner/v1/current-summoner');
     name = me.gameName ? `${me.gameName}#${me.tagLine}` : (me.displayName || '');
-  } catch (_) { /* jmeno je jen ozdoba */ }
+  } catch (_) { /* the name is only a decoration */ }
   if (!state.connected) return;   // mezitim odpadl
   bootScreen.phase = '';
   setBootPhase('connected');
@@ -3087,7 +3095,7 @@ async function bootConnected() {
   bootScreen.leaving = setTimeout(() => {
     el.classList.add('is-leaving');
     bootScreen.leaving = setTimeout(() => {
-      if (bootScreen.phase !== 'connected') return;   // mezitim se klient odpojil
+      if (bootScreen.phase !== 'connected') return;   // the client disconnected in the meantime
       el.hidden = true;
       el.classList.remove('is-leaving');
       document.body.classList.remove('boot-open');
@@ -3098,7 +3106,7 @@ async function bootConnected() {
 // --- start --------------------------------------------------------------
 
 (async function boot() {
-  // tlacitka musi na startu ukazovat, jak jsi to nechal minule
+  // the buttons must start out the way you left them last time
   if (globalThis.Reel) {
     $('#sfx-toggle').classList.toggle('is-muted', !Reel.Sfx.enabled);
     $('#fast-toggle').classList.toggle('is-on', Reel.Motion.fast);
@@ -3111,7 +3119,7 @@ async function bootConnected() {
   const live = connectLiveUpdates();
   if (live) $('#conn').title = 'Live updates on - loot refreshes automatically';
 
-  // zaloha, kdyby SSE nesedlo; se zivym kanalem staci obcasna kontrola
+  // a fallback in case SSE did not work; with the live channel a rare check is enough
   setInterval(async () => {
     if (state.busy) return;
     const was = state.connected;

@@ -1,9 +1,9 @@
 'use strict';
 
 /*
- * Animace bez prohlizece: poradi fazi, casovani, skip, rychly rezim,
- * nahodnost vyplne a pravidlo, ze se vysledek neprozradi predcasne.
- * Klient ani server nejsou potreba.
+ * The animations without a browser: the order of the phases, timing, skipping,
+ * fast mode, the randomness of the filler and the rule that the result is never
+ * given away early. Needs neither the client nor the server.
  */
 
 const { createEnv, suite, sleep } = require('./harness');
@@ -20,7 +20,7 @@ const kids = (node, cls) => node.children.filter((c) => String(c.className).spli
 const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now() - t0; };
 
 (async () => {
-  // ------------------------------------------------------------------ ruleta
+  // ---------------------------------------------------------------- roulette
   t.section('ruleta');
   let host = env.el();
   env.log.length = 0;
@@ -42,13 +42,13 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   const unveiledAt = env.log.indexOf('+is-unveiled');
   t.ok(landedAt > -1 && unveiledAt > landedAt, 'odhaleni prijde az po dojezdu');
 
-  // -------------------------------------------------------- pet pasu + vypln
+  // ------------------------------------------------------- five reels + filler
   t.section('pet pasu a vypln');
   host = env.el();
   env.mem['lootforge.fast'] = '1';
   env.log.length = 0;
   const multi = Reel.playMulti([1, 2, 3, 4, 5].map((i) => drop('Vyhra' + i, i === 3 ? 'ULTIMATE' : 'EPIC')), filler, host);
-  // zare sceny nesmi prozradit nejlepsi drop, dokud vsechny pasy nedojedou
+  // the scene's glow must not give away the best drop until every reel has landed
   const multiStage = host.children[0];
   const leaked = new Set();
   let watching = true;
@@ -77,7 +77,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   const total = rowH * 5 + 4 * 14 + Math.min(260, Math.min(937 * 0.9, 900) * 0.34);
   t.ok(total <= Math.round(937 * 0.9), `pet pasu se vejde do okna 937 px (${total} <= ${Math.round(937 * 0.9)})`);
 
-  // ------------------------------------------------------------------ kaskada
+  // ----------------------------------------------------------------- cascade
   t.section('kaskada');
   host = env.el();
   const many = Array.from({ length: 12 }, (_, i) => drop('Vec' + i, i === 7 ? 'MYTHIC' : (i % 5 ? 'DEFAULT' : 'EPIC')));
@@ -112,7 +112,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   let colourBeforeBloom = null;
   const run = Reel.reroll(offered, result, filler, host);
   stage = host.children[0];
-  // setInterval je v harnessu vypnuty (appka ho pouziva na dotazovani), proto smycka
+  // setInterval is disabled in the harness (the app uses it for polling), hence the loop
   let spying = true;
   (function spy() {
     if (!spying) return;
@@ -131,10 +131,10 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   t.ok(stage.classList.contains('is-big'), 'mythic = velky otres');
   t.ok(stage._q['.rr-label'].textContent === 'NEW SKIN', 'titulek rozkvetu');
 
-  // ------------------------------------------------- cela kresba pri zvetseni
+  // ------------------------------------------- the full artwork when it grows
   t.section('cela kresba pri zvetseni');
-  // karta pri odemknuti a portal pri rerollu maji az 900 px - ctvercovy vyrez
-  // 380x380 by se tam jen rozmazal. Obrazky "nacita" napodobenina Image.
+  // the unlock card and the reroll portal are up to 900 px wide - a square
+  // 380x380 crop would only blur there. A fake Image stands in for loading.
   let loadDelay = 5;
   global.Image = function FakeImage() {
     const im = {};
@@ -159,7 +159,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   t.ok(host.children[0]._q['.unlock-card img'].src === uncentered, 'odemknuti sampiona: velka karta ma celou kresbu');
   t.ok(!/is-icon/.test(host.children[0].innerHTML), 'kresba se neoznaci jako ikona');
 
-  loadDelay = 1500;   // kresba dorazi az po zvetseni karty (rychly obrad trva ~800 ms)
+  loadDelay = 1500;   // the artwork arrives after the card grew (a fast ceremony takes ~800 ms)
   host = env.el();
   await Reel.unlock(varus, host);
   const lateCard = host.children[0]._q['.unlock-card img'];
@@ -202,7 +202,7 @@ const timed = async (fn) => { const t0 = Date.now(); await fn(); return Date.now
   }
 
   env.mem['lootforge.fast'] = '1';
-  // kaskada ma dva pruchody (rarita, pak odhaleni), proto vic nez ruleta
+  // the cascade has two passes (rarity, then the reveal), hence more than the roulette
   const limits = { ruleta: 2300, 'pet pasu': 3200, kaskada: 2600, obrad: 1200, reroll: 2600 };
   for (const [name, fn] of [
     ['ruleta', () => Reel.play(drop('X', 'EPIC'), filler, env.el())],

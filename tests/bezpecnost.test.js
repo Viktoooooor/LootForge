@@ -1,12 +1,12 @@
 'use strict';
 
 /*
- * Nejdulezitejsi test: appka nesmi omylem sahnout na ucet.
- *  - testovaci polozky nikdy nevyrobi POST a nezapisou do statistik
- *  - michani testovacich a ostrych se odmitne
- *  - ostra cesta porad miri na klienta (POST tu zablokuje harness)
- *  - pri vypadku klienta se hromadna akce zastavi hned
- * Potrebuje server a klienta.
+ * The most important test: the app must never touch the account by accident.
+ *  - test items never produce a POST and never write to the statistics
+ *  - mixing test and real items is refused
+ *  - the real path still points at the client (the harness blocks the POST here)
+ *  - when the client drops out, a bulk action stops immediately
+ * Needs the server and the client.
  */
 
 const fs = require('fs');

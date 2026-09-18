@@ -1,16 +1,16 @@
 'use strict';
 
 /*
- * Spolecne prostredi pro testy.
+ * The shared environment for the tests.
  *
- * Kazdy test bezi ve vlastnim procesu (poustí je run.js), takze si muze
- * nastavit globalni napodobeniny bez obav, ze se ovlivni navzajem:
- *   - DOM (jen tolik, kolik appka opravdu pouziva)
+ * Every test runs in its own process (run.js starts them), so it can set up
+ * global stand-ins without them affecting each other:
+ *   - the DOM (only as much as the app really uses)
  *   - WebAudio, localStorage, requestAnimationFrame, EventSource
- *   - fetch presmerovany na bezici server.js
+ *   - fetch pointed at the running server.js
  *
- * POST JE ZABLOKOVANY. Zadny test nesmi nic vyrobit, otevrit ani rozlozit na
- * skutecnem uctu - pokus se jen zaznamena do env.posts a fetch selze.
+ * POST IS BLOCKED. No test may craft, open or disenchant anything on a real
+ * account - an attempt is only recorded in env.posts and the fetch fails.
  */
 
 const fs = require('fs');
@@ -24,19 +24,19 @@ const EXIT = { OK: 0, FAIL: 1, SKIP: 3 };
 
 function createEnv(options = {}) {
   const env = {
-    log: [],            // zmeny trid: '+trida' / '-trida'
-    posts: [],          // zablokovane pokusy o POST (url)
-    postBodies: [],     // ... a jejich tela, at jde overit, co by se poslalo
+    log: [],            // class changes: '+class' / '-class'
+    posts: [],          // blocked POST attempts (url)
+    postBodies: [],     // ... and their bodies, so what would be sent can be checked
     mem: {
       'lootforge.mute': options.sound ? '0' : '1',
-      'lootforge.welcome': '1',                           // uvodni upozorneni by blokovalo klavesy
-      'lootforge.testItems': options.testItems === false ? '0' : '1',   // testy s nimi pocitaji
+      'lootforge.welcome': '1',                           // the first-start notice would swallow the keys
+      'lootforge.testItems': options.testItems === false ? '0' : '1',   // the tests count on them
     },
     sound: { osc: 0, noise: 0 },
     keyHandlers: [],
     clickHandlers: [],
     autoConfirm: options.autoConfirm !== false,
-    postResponse: null,   // (url) => podvrzena odpoved na zablokovany POST
+    postResponse: null,   // (url) => a faked response to a blocked POST
     top: {},
   };
 
@@ -73,7 +73,7 @@ function createEnv(options = {}) {
       get innerHTML() { return e._html; },
       set onclick(fn) {
         e._onclick = fn;
-        // "uzivatel klikne Potvrdit" - jen kdyz si to test preje
+        // "the user clicks Confirm" - only when the test wants it
         if (fn && env.autoConfirm && e === env.top['#modal-ok']) setTimeout(fn, 0);
       },
       get onclick() { return e._onclick; },
@@ -84,8 +84,8 @@ function createEnv(options = {}) {
   env.el = el;
   env.pick = (sel) => { if (!env.top[sel]) env.top[sel] = el(); return env.top[sel]; };
 
-  // prvky, ktere maji v index.html atribut hidden, zacinaji skryte i tady -
-  // jinak by si treba obsluha klaves myslela, ze je otevrene potvrzovaci okno
+  // elements with a hidden attribute in index.html start hidden here too -
+  // otherwise the key handler would think a confirmation dialog is open
   const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
   for (const m of html.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
     if (/\shidden(\s|>|=)/.test(m[0])) env.pick('#' + m[1]).hidden = true;
@@ -111,7 +111,7 @@ function createEnv(options = {}) {
     removeItem: (k) => { delete env.mem[k]; },
   };
   global.requestAnimationFrame = (fn) => setTimeout(() => fn(performance.now()), 16);
-  global.setInterval = () => 0;   // obcasne dotazovani appky v testech nechceme
+  global.setInterval = () => 0;   // the app's occasional polling is not wanted in tests
   global.EventSource = function EventSource() { this.addEventListener = () => {}; };
 
   // --- WebAudio ----------------------------------------------------------
@@ -136,10 +136,10 @@ function createEnv(options = {}) {
   const realFetch = global.fetch;
   global.fetch = (url, init) => {
     const method = String((init && init.method) || 'GET').toUpperCase();
-    if (method !== 'GET' && method !== 'HEAD') {   // cist smi, menit ne
+    if (method !== 'GET' && method !== 'HEAD') {   // reading is allowed, changing is not
       env.posts.push(url);
       env.postBodies.push(init && init.body);
-      // test si muze vyzadat podvrzenou odpoved (napr. 502 = odpadly klient)
+      // a test can ask for a faked response (502 = the client dropped out, say)
       const fakeResponse = env.postResponse && env.postResponse(url);
       if (fakeResponse) return Promise.resolve(fakeResponse);
       return Promise.reject(new Error('POST zablokovan testem'));
@@ -148,8 +148,8 @@ function createEnv(options = {}) {
   };
 
   /**
-   * Klik bez skutecneho DOMu: `hits` rika, co by target.closest(selektor) nasel,
-   * napr. { '.card[data-selectable]': { dataset: { id, detail: '1' } } }.
+   * A click without a real DOM: `hits` says what target.closest(selector) would
+   * find, e.g. { '.card[data-selectable]': { dataset: { id, detail: '1' } } }.
    */
   env.click = (hits) => {
     const target = { closest: (sel) => (hits && hits[sel]) || null };
@@ -159,9 +159,9 @@ function createEnv(options = {}) {
   env.press = (key) => env.keyHandlers.forEach((h) => h({ key, code: key === ' ' ? 'Space' : key, preventDefault() {} }));
 
   /**
-   * Nacte soubory z public/ tak, jak je nacita prohlizec. Do app.js prida na
-   * konec radek, ktery vystavi jmenovane interni funkce - app.js je ve strict
-   * modu, takze zvenci by na ne jinak nebylo videt.
+   * Loads the files from public/ the way the browser does. It appends a line to
+   * app.js that exposes the named internal functions - app.js is in strict mode,
+   * so they would not be visible from the outside otherwise.
    */
   env.load = (files, exports) => {
     for (const f of files) {
@@ -177,7 +177,7 @@ function createEnv(options = {}) {
   return env;
 }
 
-/** Bezi server a je pripojeny klient? */
+/** Is the server running and a client connected? */
 async function clientStatus() {
   try {
     const ctrl = new AbortController();
@@ -191,7 +191,7 @@ async function clientStatus() {
   }
 }
 
-/** Minimalisticka sada kontrol - zadny framework, nula zavislosti. */
+/** A minimal set of checks - no framework, no dependencies. */
 function suite(name) {
   let fails = 0;
   let checks = 0;

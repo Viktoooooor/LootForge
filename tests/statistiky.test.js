@@ -1,9 +1,10 @@
 'use strict';
 
 /*
- * Statistiky: zapis po klicich, nacteni stareho formatu, co se pocita z beden
- * a vykresleni. Klienta nepotrebuje - pracuje jen s localStorage napodobeninou.
- * Ze testovaci polozky do statistik nezapisuji, hlida bezpecnost.test.js.
+ * The statistics: adding per key, reading the old format, what is counted from
+ * chests and how it is rendered. No client needed - it only works with the
+ * localStorage stand-in. That test items never write here is covered by
+ * bezpecnost.test.js.
  */
 
 const { createEnv, suite, sleep } = require('./harness');
@@ -12,13 +13,13 @@ const t = suite('statistiky');
 
 (async () => {
   const env = createEnv();
-  // stary format ze starsi verze appky
+  // the old format from an earlier version of the app
   env.mem['lootforge.stats'] = JSON.stringify({ opened: 5, disenchanted: 2 });
   const app = env.load(['reel.js', 'simulator.js', 'app.js'], [
     'readStats', 'bumpStats', 'recordChests', 'renderSession', 'kindOf', 'currencyOf', 'rarityChartHtml',
   ]);
   const $ = env.pick;
-  await sleep(50);   // boot appky (bez klienta skonci hned)
+  await sleep(50);   // the app's boot (without a client it finishes right away)
 
   t.section('stary format');
   const old = app.readStats();

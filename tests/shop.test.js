@@ -1,10 +1,10 @@
 'use strict';
 
 /*
- * Mythic shop: prehled ze serveru, vykresleni nabidek a nakup.
- * Nakup se NIKDY neodesle - harness zapis blokuje. Overuje se jen, ze by
- * odesel spravny request, a ze testovaci nabidka nic neposle.
- * Potrebuje server a klienta.
+ * The Mythic Shop: the summary from the server, how the offers are rendered and
+ * buying. A purchase is NEVER sent - the harness blocks writes. Only the request
+ * that would be sent is checked, and that the test offer sends nothing.
+ * Needs the server and the client.
  */
 
 const { createEnv, clientStatus, suite, BASE } = require('./harness');
@@ -19,7 +19,7 @@ const t = suite('shop');
   const res = await fetch(BASE + '/api/mythic-shop');
   const raw = await res.text();
   let shop = null;
-  try { shop = JSON.parse(raw); } catch (_) { /* zustane null */ }
+  try { shop = JSON.parse(raw); } catch (_) { /* it stays null */ }
   t.ok(res.ok && shop && Array.isArray(shop.stores), `GET /api/mythic-shop: ${res.status}, ${raw.length} B`);
   if (!shop || !shop.stores.length) return t.done();
 
@@ -56,7 +56,7 @@ const t = suite('shop');
   t.ok(/Test offer \(simulated\)/.test(html) && /SIMULATED/.test(html), 'testovaci nabidka je zretelne oznacena');
   t.ok(/Mythic Essence/.test($('#shop-balance').innerHTML), 'zustatek esence v hlavicce obchodu');
 
-  // umele stavy: vlastnene a nedostatek esence
+  // artificial states: owned, and not enough essence
   const me = app.countOf('CURRENCY_mythic');
   const fakeStore = { id: 'X', label: 'Kontrola', endTime: new Date(Date.now() + 90000000).toISOString(), entries: [
     { storeId: 'X', catalogEntryId: 'OWNED', name: 'Vlastneny', kind: 'skin', img: '', rarity: 'MYTHIC', price: 1, paymentKey: '0-lol_mythic_essence', owned: true },

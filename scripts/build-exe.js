@@ -2,25 +2,25 @@
 'use strict';
 
 /*
- * Postavi LootForge.exe - jeden soubor, hrac nepotrebuje instalovat Node.js.
+ * Builds LootForge.exe - one file, so the player does not have to install Node.js.
  *
- *   node scripts/build-exe.js      (nebo npm run build)
+ *   node scripts/build-exe.js      (or npm run build)
  *
- * Pouziva vestaveny Node "single executable application" (SEA): server.js je
- * hlavni skript, public/ a package.json se zabali jako assety a server je cte
- * pres node:sea (viz readAppFile v server.js). Vysledek:
+ * It uses Node's built-in "single executable application" (SEA): server.js is
+ * the main script, public/ and package.json are bundled as assets and the server
+ * reads them through node:sea (see readAppFile in server.js). The result:
  *
  *   dist/LootForge.exe
- *   dist/LootForge-<verze>-windows-x64.zip   (exe + README, LICENSE, CHANGELOG)
+ *   dist/LootForge-<version>-windows-x64.zip   (exe + README, LICENSE, CHANGELOG)
  *
- * Appka sama zadne zavislosti nema. Jen pri buildu se pres npx stahne nastroj
- * postject (oficialni nastroj Node.js pro vlozeni blobu do exe).
+ * The app itself has no dependencies. Only the build downloads postject through
+ * npx (the official Node.js tool for injecting the blob into the exe).
  *
- * Exe bezi bez okna konzole (subsystem GUI); vypisy jdou do
- * %LOCALAPPDATA%\LootForge\lootforge.log a konci samo po zavreni zalozky.
+ * The exe runs without a console window (GUI subsystem); its output goes to
+ * %LOCALAPPDATA%\LootForge\lootforge.log and it quits once the tab is closed.
  *
- * Exe neni podepsane - Windows SmartScreen pri prvnim spusteni zobrazi
- * varovani "Windows protected your PC" (More info -> Run anyway).
+ * The exe is not signed - on the first run Windows SmartScreen shows
+ * "Windows protected your PC" (More info -> Run anyway).
  */
 
 const fs = require('fs');
@@ -34,15 +34,16 @@ const EXE = path.join(DIST, 'LootForge.exe');
 const BLOB = path.join(DIST, 'sea-prep.blob');
 const CONFIG = path.join(DIST, 'sea-config.json');
 const ZIP = path.join(DIST, `LootForge-${pkg.version}-windows-x64.zip`);
-// hodnota z dokumentace Node.js pro SEA - postject podle ni najde misto v exe
+// the value from the Node.js SEA documentation - postject finds the spot in the exe by it
 const FUSE = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 
 function step(msg) { console.log(`\n> ${msg}`); }
 
 /*
- * Soubor muze byt zamceny ze dvou duvodu: antivirus si cerstve exe na par vterin
- * zamkne ke kontrole (staci pockat), nebo LootForge.exe prave bezi (to musi
- * zavrit uzivatel - proto to radeji rekneme, nez zkouset osmkrat to same).
+ * A file can be locked for two reasons: the antivirus holds a freshly written
+ * exe for a few seconds while it scans it (just wait), or LootForge.exe is
+ * running (only the user can close that - so say it instead of retrying eight
+ * times in vain).
  */
 function running() {
   try {
@@ -78,7 +79,7 @@ if (major < 20 || (major === 20 && minor < 12)) {
 step('assety');
 const assets = {
   'package.json': path.join(ROOT, 'package.json'),
-  // MIT: text licence musi jit s programem, at se siri jen samotne exe
+  // MIT: the licence text has to travel with the program, so the exe can be shared on its own
   LICENSE: path.join(ROOT, 'LICENSE'),
 };
 (function walk(dir) {
@@ -112,9 +113,9 @@ execFileSync('npx', ['--yes', 'postject@1.0.0-alpha.6', EXE, 'NODE_SEA_BLOB', BL
   { stdio: 'inherit', cwd: ROOT, shell: true });
 
 step('bez okna konzole');
-// PE hlavicka: e_lfanew na 0x3C, za podpisem "PE\0\0" (4) a COFF hlavickou (20)
-// zacina optional header a v nem je na offsetu 68 Subsystem (2 = GUI, 3 = konzole).
-// Stejne u PE32 i PE32+. Exe neni podepsane, takze checksum nikdo nekontroluje.
+// PE header: e_lfanew at 0x3C; after the "PE\0\0" signature (4) and the COFF header (20)
+// comes the optional header, whose offset 68 holds Subsystem (2 = GUI, 3 = console).
+// The same for PE32 and PE32+. The exe is not signed, so nobody checks the checksum.
 {
   const buf = fs.readFileSync(EXE);
   const pe = buf.readUInt32LE(0x3c);
@@ -132,7 +133,7 @@ const files = [EXE, ...['README.md', 'LICENSE', 'CHANGELOG.md'].map((f) => path.
 retry('baleni zipu', () => {
   execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
     `$ErrorActionPreference = 'Stop'; Compress-Archive -Path ${files.map((f) => `'${f}'`).join(',')} -DestinationPath '${ZIP}' -Force`], { stdio: 'pipe' });
-  // Compress-Archive umi pri zamcenem souboru skoncit "uspesne" s prazdnym zipem
+  // with a locked file Compress-Archive can "succeed" and leave an empty zip
   if (!fs.existsSync(ZIP) || fs.statSync(ZIP).size < fs.statSync(EXE).size / 10) {
     fs.rmSync(ZIP, { force: true });
     throw new Error('zip je prazdny');

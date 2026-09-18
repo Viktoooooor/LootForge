@@ -1,11 +1,11 @@
 'use strict';
 
 /*
- * Skiny na sampiona a detail skinu. Potrebuje server a klienta.
- *  - seznam vlastnenych skinu (nezavisle proti klientovi, bez Jade)
- *  - detail skin shardu: CELY splash (uncentered), galerie, nahled, video
- *  - champion shardy detail ani skiny nemaji (bez sampiona nemas ani skin)
- * Video se hleda na YouTube jen jednou za beh (server si ho pamatuje).
+ * Skins for a champion and the skin details. Needs the server and the client.
+ *  - the list of owned skins (checked independently against the client, no Jade)
+ *  - skin shard details: the FULL splash (uncentered), the gallery, preview, video
+ *  - champion shards have neither details nor skins (no champion, no skin)
+ * The video is searched on YouTube once per run (the result is remembered).
  */
 
 const { createEnv, clientStatus, suite, BASE } = require('./harness');
@@ -39,7 +39,7 @@ const t = suite('skiny');
   const art = await (await fetch(`${BASE}/api/skin/${all[0].id}`)).json();
   t.ok(/uncentered/.test(art.splash) && art.championName, `/api/skin/${all[0].id}: ${art.name} (${art.championName})`);
 
-  // ---------------------------------------------------------------- appka
+  // ------------------------------------------------------------------ the app
   const env = createEnv();
   const app = env.load(['reel.js', 'simulator.js', 'app.js'], [
     'state', 'loadLoot', 'itemsIn', 'cardHtml', 'championIdOf', 'skinIdOf', 'skinChampionOf', 'fullSplashOf',
@@ -93,7 +93,7 @@ const t = suite('skiny');
   t.section('detail - obrazek');
   const expected = '/lcu' + app.fullSplashOf(shard.splashPath);
   const pending = app.openDetail(shard.lootId);
-  // prvni obrazek se nastavi hned, bez cekani na server
+  // the first image is set right away, without waiting for the server
   t.ok($('#detail-img').src === expected, `hned cely splash z lootu, bez serveru: ${expected.split('/').pop()}`);
   t.ok(!/_tile_|_centered_/.test($('#detail-img').src), 'ne ctvercovy vyrez ani priblizena verze');
   const ctx = await pending;
@@ -117,7 +117,7 @@ const t = suite('skiny');
   }
 
   t.section('detail - video prohlidka');
-  // YouTube se nikdy nestahuje. Bez klice obycejny odkaz, s klicem oficialni API.
+  // YouTube is never scraped. Without a key a plain link, with a key the official API.
   const shardName = ctx.name;
   const info0 = $('#detail-info').innerHTML;
   t.ok(!/data-video/.test(info0) && /<a class="ghost-btn video-btn" href="https:\/\/www\.youtube\.com\/results\?search_query=SkinSpotlights/.test(info0)
@@ -194,9 +194,9 @@ const t = suite('skiny');
   app.closeDetail();
   t.ok($('#detail-video').innerHTML === '', 'zavreni detailu video zastavi');
 
-  // po createEnv() fetch adresu serveru doplnuje sam - tady jen relativni cesty
+  // after createEnv() fetch adds the server address itself - relative paths only here
   t.section('chromy');
-  // skin s chromami, ktere hrac aspon zcasti vlastni - najit pres inventar klienta
+  // a skin whose chromas the player at least partly owns - found via the client's inventory
   const inventory = await (await fetch('/lcu/lol-inventory/v2/inventory/CHAMPION_SKIN')).json();
   const invIds = new Set(inventory.map((i) => i.itemId));
   const withChromas = Object.values(skinsJson)
@@ -235,7 +235,7 @@ const t = suite('skiny');
     app.saveYoutubeKey('');
     global.fetch = realFetch;
 
-    // nahled jineho vlastniho skinu = jeho chromy
+    // previewing another owned skin = its chromas
     const otherOwned = app.ownedSkinsFor(champOfSkin).find((sk) => sk.id !== withChromas.id);
     if (otherOwned) {
       await app.previewSkin(otherOwned.id);

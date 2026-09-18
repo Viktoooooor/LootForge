@@ -1,9 +1,10 @@
 'use strict';
 
 /*
- * Staticka kontrola CSS proti kodu. Chyta chyby, ktere headless testy animaci
- * neuvidi: JS nastavi tridu, pro kterou CSS nema pravidlo, a animace se tise
- * nestane (takhle zmizelo .sfx-btn.is-muted). Plus dve pasti s posuvnikem.
+ * A static check of the CSS against the code. It catches what headless
+ * animation tests cannot see: JS sets a class the CSS has no rule for and the
+ * animation quietly does not happen (that is how .sfx-btn.is-muted disappeared).
+ * Plus two scrollbar traps.
  */
 
 const fs = require('fs');
@@ -17,7 +18,7 @@ const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
 const CSS = { 'app.css': stripComments(read('app.css')), 'reel.css': stripComments(read('reel.css')) };
 const CODE = ['index.html', 'app.js', 'reel.js', 'simulator.js'].map((f) => [f, read(f)]);
 
-// Tridy, ktere zamerne nemaji styl - jsou to jen haky pro JS.
+// Classes that deliberately have no style - they are only hooks for JS.
 const HOOKS = {
   'conn-label': 'querySelector pro text stavu pripojeni',
   'group': 'obal skupiny, mezery resi .groups',
@@ -45,7 +46,7 @@ for (const css of Object.values(CSS)) {
 
 const used = new Map();
 const note = (raw, where) => {
-  // tokeny z template literalu (${...}, ternary) ocistit od uvozovek a zavorek
+  // tokens from template literals (${...}, ternaries) stripped of quotes and braces
   const c = String(raw).replace(/^[`'"{}]+|[`'"{}]+$/g, '').trim();
   if (!/^[A-Za-z][\w-]*$/.test(c)) return;
   if (!used.has(c)) used.set(c, where);
@@ -57,11 +58,11 @@ for (const [f, src] of CODE) {
   }
   for (const m of src.matchAll(/makeEl\(\s*[`']([^`']+)[`']/g)) m[1].split(/\s+/).forEach((c) => note(c, f));
 }
-// dynamicke rare-* a r-* rozepsat
+// spell out the dynamic rare-* and r-*
 for (const r of ['EPIC', 'LEGENDARY', 'MYTHIC', 'ULTIMATE']) { note('rare-' + r, 'dynamicky'); note('r-' + r, 'dynamicky'); }
 
 const missing = [...used.keys()].filter((c) => !defined.has(c) && !HOOKS[c]);
-// jen tokeny, ktere opravdu vypadaji jako nazev tridy (ne slova z ternaru)
+// only tokens that really look like a class name (not words from a ternary)
 const suspicious = missing.filter((c) => c.includes('-'));
 t.ok(suspicious.length === 0, suspicious.length
   ? `trida bez pravidla: ${suspicious.map((c) => `${c} (${used.get(c)})`).join(', ')}`
@@ -75,7 +76,7 @@ for (const [f, css] of Object.entries(CSS)) {
   const vw100 = [...css.matchAll(/(?:^|[;{\s])(?:max-)?width:\s*100vw/g)];
   t.ok(vw100.length === 0, `${f}: zadne width: 100vw (pocita i se svislym posuvnikem)`);
 
-  // kazde pravidlo s overflow-y musi explicitne rict i overflow-x
+  // every rule with overflow-y has to state overflow-x explicitly as well
   const rules = css.split('}').map((r) => r.split('{').pop());
   const bad = rules.filter((r) => /overflow-y\s*:\s*(auto|scroll)/.test(r) && !/overflow-x\s*:/.test(r) && !/overflow\s*:/.test(r));
   t.ok(bad.length === 0, `${f}: overflow-y: auto nikde bez overflow-x (${bad.length} prohresku)`);

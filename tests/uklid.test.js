@@ -1,10 +1,10 @@
 'use strict';
 
 /*
- * Filtry v tabech a uklid inventare. Pravidla se overuji na umelych polozkach
- * primichanych do skutecneho inventare (at je jasne, co ktere pravidlo vezme).
- * Rozkladani NIKDY neodejde - harness POST blokuje, uspech se jen podvrhne.
- * Potrebuje server a klienta.
+ * The filters in the tabs and the inventory clean up. The rules are checked on
+ * artificial items mixed into the real inventory (so it is clear which rule
+ * takes what). Disenchanting is NEVER sent - the harness blocks POST and success
+ * is only faked. Needs the server and the client.
  */
 
 const { createEnv, clientStatus, suite } = require('./harness');
@@ -68,7 +68,7 @@ const t = suite('uklid');
     S.recipes.set(lootId, [{ type: 'DISENCHANT', recipeName: type + '_disenchant', slots: [{ slotNumber: 0, lootIds: [lootId], quantity: 1 }] }]);
     return item;
   };
-  // realny inventar do pravidel nepleteme - kontrolujeme jen umele polozky
+  // keep the real inventory out of the rules - only the artificial items are checked
   const realIds = new Set(S.items.map((i) => i.lootId));
   const champOwned = fake('CHAMPION_RENTAL_9901', 'CHAMPION_RENTAL', true, 3, 960, 'CURRENCY_champion');
   const champMissing = fake('CHAMPION_RENTAL_9902', 'CHAMPION_RENTAL', false, 3, 1260, 'CURRENCY_champion');
@@ -106,7 +106,7 @@ const t = suite('uklid');
   t.ok(/currency_champion/.test($('#cleanup-total').innerHTML) && !$('#cleanup-go').disabled, 'soucet esence s ikonou, tlacitko odemcene');
 
   t.section('rozlozeni (POST zablokovany, uspech podvrzeny)');
-  // jen umele polozky, at je videt presne, co by odeslo
+  // artificial items only, so it is clear exactly what would be sent
   for (const g of app.cleanupPlan().groups) for (const e of g.entries) if (realIds.has(e.item.lootId)) S.cleanup.skip.add(e.item.lootId);
   const before = app.readStats();
   env.postResponse = (url) => {

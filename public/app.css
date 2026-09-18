@@ -1,4 +1,4 @@
-/* Hextech Gamba - tmavy hextech look, zadny framework */
+/* LootForge - a dark hextech-flavoured look, no framework */
 
 :root {
   --bg:          #080d14;
@@ -12,17 +12,17 @@
   --text-dim:    #7a8b9c;
   --danger:      #d64d4d;
 
-  /* barvy rarit podle oficialnich drahokamu z klienta
+  /* rarity colours taken from the client's official gems
      (/lol-game-data/assets/v1/rarity-gem-icons/*.png) */
   --r-default:      #7a8b9c;
-  --r-epic:         #19c9dc;   /* tyrkysovy trojuhelnik */
-  --r-legendary:    #e8323a;   /* cerveny */
-  --r-mythic:       #d62ad0;   /* purpurovy */
-  --r-ultimate:     #f08a14;   /* oranzovy */
-  --r-transcendent: #b79be0;   /* duhova osmicipa hvezda */
-  --r-exalted:      #d4c65a;   /* z tyrkysove do zlate */
+  --r-epic:         #19c9dc;   /* the teal triangle */
+  --r-legendary:    #e8323a;   /* red */
+  --r-mythic:       #d62ad0;   /* magenta */
+  --r-ultimate:     #f08a14;   /* orange */
+  --r-transcendent: #b79be0;   /* the iridescent eight-pointed star */
+  --r-exalted:      #d4c65a;   /* teal into gold */
 
-  --sim:         #a95cff;      /* testovaci veci - schvalne mimo barvy rarit */
+  --sim:         #a95cff;      /* test things - deliberately outside the rarity colours */
   --owned:       #16a36c;
 }
 
@@ -31,8 +31,9 @@
 body {
   margin: 0;
   min-height: 100vh;
-  /* zare a strepy z animaci schvalne prelezaji ven - nesmi ale delat
-     vodorovny posuvnik. `clip` na rozdil od `hidden` nezaklada scroll kontejner. */
+  /* the glow and shards from the animations spill out on purpose - but they must
+     not create a horizontal scrollbar. Unlike `hidden`, `clip` does not make a
+     scroll container. */
   overflow-x: clip;
   background:
     radial-gradient(1200px 600px at 50% -10%, #12283a 0%, transparent 60%),
@@ -42,14 +43,14 @@ body {
   padding-bottom: 90px;
 }
 
-/* pri otevrenem odhaleni se pozadi nema posouvat pod nim */
+/* nothing should scroll behind an open reveal */
 body.reveal-open { overflow-y: hidden; }
 
 h2 { margin: 0; font-size: 20px; color: var(--gold-bright); font-weight: 600; letter-spacing: .3px; }
 h3 { margin: 0 0 6px; color: var(--gold-bright); font-weight: 600; }
 .sub { margin: 4px 0 0; color: var(--text-dim); font-size: 13px; }
 
-/* --- horni lista --- */
+/* --- the top bar --- */
 
 .topbar {
   display: flex; align-items: center; gap: 24px;
@@ -76,7 +77,7 @@ h3 { margin: 0 0 6px; color: var(--gold-bright); font-weight: 600; }
 .conn.on .dot { background: var(--teal); box-shadow: 0 0 10px var(--teal); }
 .conn.off .dot { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
-/* --- taby --- */
+/* --- tabs --- */
 
 .tabs {
   display: flex; gap: 4px; align-items: center;
@@ -98,7 +99,7 @@ h3 { margin: 0 0 6px; color: var(--gold-bright); font-weight: 600; }
 .tab-btn.is-active .pill { background: var(--gold); color: #1a1410; }
 #refresh { margin-left: auto; }
 
-/* --- panely --- */
+/* --- panels --- */
 
 main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 .panel { display: none; }
@@ -111,7 +112,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 }
 .filters { display: flex; gap: 8px; }
 
-/* --- tlacitka --- */
+/* --- buttons --- */
 
 .big-btn {
   background: linear-gradient(180deg, #1c3a4a, #123040);
@@ -131,7 +132,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 }
 .ghost-btn:hover { border-color: var(--gold); color: var(--gold-bright); }
 
-/* --- mrizka karet --- */
+/* --- the card grid --- */
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 
@@ -174,7 +175,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 
 .empty { color: var(--text-dim); padding: 40px 0; text-align: center; grid-column: 1/-1; }
 
-/* --- spodni lista vyberu --- */
+/* --- the selection bar at the bottom --- */
 
 .actionbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
@@ -187,7 +188,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 .ab-value { color: var(--teal); font-variant-numeric: tabular-nums; }
 .ab-buttons { margin-left: auto; display: flex; gap: 10px; }
 
-/* --- vlastnene skiny na sampiona --- */
+/* --- skins owned for a champion --- */
 
 .skins-chip { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-dim); }
 .skins-chip b { color: var(--gold-bright); }
@@ -238,7 +239,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 .modal.is-wide .modal-box { width: min(720px, 94vw); }
 .modal .skins-owned { width: 100%; margin-top: 4px; }
 
-/* --- vyber a detail na kartach --- */
+/* --- selecting and details on cards --- */
 
 .card[data-detail] { cursor: zoom-in; }
 .rr-active .card[data-detail] { cursor: pointer; }
@@ -259,7 +260,7 @@ main { padding: 22px; max-width: 1500px; margin: 0 auto; }
 .sum-card[data-drop]:hover { border-color: var(--gold); }
 .detail-open-btn { display: block; margin: -8px auto 4px; }
 
-/* --- detail: cely splash + skiny na sampiona --- */
+/* --- details: the full splash + the champion's skins --- */
 
 body.detail-open { overflow-y: hidden; }
 .detail {
@@ -286,14 +287,14 @@ body.detail-open { overflow-y: hidden; }
 }
 .detail-close:hover { border-color: var(--gold); }
 
-/* uncentered splash je 1215x717 */
+/* the uncentered splash is 1215x717 */
 .detail-art { position: relative; aspect-ratio: 1215 / 717; background: #04070b; overflow: hidden; }
 .detail-art img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter .4s ease, transform .4s ease; }
 .detail-art.is-loading img { filter: blur(14px) saturate(.7) brightness(.8); transform: scale(1.04); }
-/* kdyz se splash nenacte: miniaturu nenafukovat, radsi mensi a ostra */
+/* when the splash does not load: do not blow the tile up, rather small and sharp */
 .detail-art.is-fallback img { object-fit: contain; filter: none; transform: none; }
 
-/* video prohlidka: 16:9 a pres cely obrazek */
+/* the video preview: 16:9 and over the whole image */
 .detail-art.is-video { aspect-ratio: 16 / 9; }
 .detail-video { position: absolute; inset: 0; z-index: 2; display: none; background: #000; }
 .detail-art.is-video .detail-video { display: block; }
@@ -325,7 +326,7 @@ body.detail-open { overflow-y: hidden; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
   padding: 14px 18px; border-bottom: 1px solid var(--line);
 }
-/* min-width: 0 - jinak dlouhe jmeno skinu ve flexu nezalomi a roztahne radek */
+/* min-width: 0 - otherwise a long skin name will not wrap in the flex row and stretches it */
 .detail-head { min-width: 0; flex: 1 1 260px; }
 .detail-name { display: flex; align-items: center; gap: 10px; font-size: 22px; color: var(--gold-bright); font-weight: 600; }
 .detail-name img { height: 30px; width: auto; filter: drop-shadow(0 0 8px var(--rc)); }
@@ -342,7 +343,7 @@ body.detail-open { overflow-y: hidden; }
 .detail-tags .is-owned i { width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
 .detail-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 
-/* --- chromy --- */
+/* --- chromas --- */
 
 .chromas { padding: 14px 18px 4px; }
 .chromas .skins-owned-title em { font-style: normal; color: var(--text-dim); letter-spacing: 1px; text-transform: none; font-weight: 400; }
@@ -376,7 +377,7 @@ body.detail-open { overflow-y: hidden; }
 }
 .chroma-note { padding: 0 6px 5px; font-size: 10px; color: var(--text-dim); }
 
-/* nahled chromy nad ztlumenym splashem - obrazek v puvodni velikosti */
+/* the chroma preview over a dimmed splash - the image at its own size */
 .detail-chroma { position: absolute; inset: 0; z-index: 2; display: none; }
 .detail-art.is-chroma .detail-chroma { display: block; }
 .detail-art.is-chroma > img { filter: brightness(.35) blur(3px) saturate(.6); transform: scale(1.03); }
@@ -407,7 +408,7 @@ body.detail-open { overflow-y: hidden; }
   background: var(--owned); color: #eafff4;
 }
 
-/* --- mythic shop --- */
+/* --- Mythic Shop --- */
 
 .shop-balance {
   display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px;
@@ -430,7 +431,7 @@ body.detail-open { overflow-y: hidden; }
 .shop-price.is-short b { color: var(--danger); }
 .shop-group.is-test .group-head h3 { color: var(--sim); }
 
-/* --- souhrn toho, co padlo --- */
+/* --- the summary of what dropped --- */
 
 .reel-host { transition: opacity .28s ease; }
 .reel-host.is-fading { opacity: 0; }
@@ -482,7 +483,7 @@ body.detail-open { overflow-y: hidden; }
 .sum-name { padding: 8px 9px 2px; font-size: 12px; color: var(--gold-bright); font-weight: 600; line-height: 1.3; }
 .sum-type { padding: 0 9px 9px; font-size: 11px; color: var(--text-dim); }
 
-/* --- vlastneny skin / sampion: zelena paska s fajfkou --- */
+/* --- an owned skin / champion: a green ribbon with a tick --- */
 
 .card.is-owned { border-color: color-mix(in srgb, var(--owned) 45%, transparent); }
 .card.is-owned .card-img img { filter: saturate(.5) brightness(.78); }
@@ -502,7 +503,7 @@ body.detail-open { overflow-y: hidden; }
   transform: rotate(-45deg);
 }
 
-/* --- reroll: zasobnik se tremi sloty --- */
+/* --- reroll: the three-slot tray --- */
 
 .rr-tray {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 46;
@@ -544,21 +545,21 @@ body.detail-open { overflow-y: hidden; }
 .rr-info span { color: var(--text-dim); font-size: 12px; }
 .rr-tray .ab-buttons { margin-left: auto; }
 
-/* v rezimu rerollu jsou nepouzitelne karty potlacene */
+/* in reroll mode the cards that cannot be used are dimmed */
 .rr-active .card[data-selectable]:not([data-rr]) { opacity: .28; filter: grayscale(.7); pointer-events: none; }
 body.rr-on { padding-bottom: 130px; }
 #reroll-mode.is-on { border-color: var(--gold); color: var(--gold-bright); box-shadow: 0 0 14px rgba(200,170,110,.3); }
 
-/* --- reveal --- */
+/* --- the reveal --- */
 
 .reveal {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(3,6,10,.94);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(3px);
-  overflow: hidden;   /* strepy a zare smi prelezat ven, ale ne rolovat */
+  overflow: hidden;   /* shards and the glow may spill out, but must not scroll */
 }
-/* brana: pri otevreni se rozjede zlata linka a dve desky se rozestoupi */
+/* the gate: on opening a gold line runs out and two plates part */
 .reveal-gate { position: absolute; inset: 0; z-index: 70; pointer-events: none; }
 .reveal-gate i {
   position: absolute; left: 0; right: 0; height: 50%;
@@ -609,7 +610,7 @@ body.rr-on { padding-bottom: 130px; }
 .reveal-inner {
   width: min(1100px, 92vw); max-height: 90vh; text-align: center;
   overflow-y: auto;
-  overflow-x: hidden;   /* bez tohohle si prohlizec k overflow-y sam dopocita auto */
+  overflow-x: hidden;   /* without this the browser works out `auto` for overflow-x by itself */
 }
 .reveal h3 { font-size: 22px; letter-spacing: 2px; margin-bottom: 22px; }
 .reveal-cards { margin-bottom: 24px; }
@@ -637,7 +638,7 @@ body.rr-on { padding-bottom: 130px; }
 .drop.rare-TRANSCENDENT { border-color: var(--r-transcendent); box-shadow: 0 0 38px color-mix(in srgb, var(--r-transcendent) 60%, transparent); }
 .drop.rare-EXALTED      { border-color: var(--r-exalted);      box-shadow: 0 0 42px color-mix(in srgb, var(--r-exalted) 60%, transparent); }
 
-/* --- modal --- */
+/* --- the modal --- */
 
 .modal {
   position: fixed; inset: 0; z-index: 70; background: rgba(3,6,10,.8);
@@ -650,7 +651,7 @@ body.rr-on { padding-bottom: 130px; }
 .modal-box p { color: var(--text-dim); line-height: 1.6; }
 .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
-/* --- session --- */
+/* --- the session --- */
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 26px; }
 .stat { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 16px; }
@@ -673,7 +674,7 @@ body.rr-on { padding-bottom: 130px; }
 .h-row.rare-TRANSCENDENT  { border-left-color: var(--r-transcendent); }
 .h-row.rare-EXALTED  { border-left-color: var(--r-exalted); }
 
-/* --- toast --- */
+/* --- the toast --- */
 
 .toast {
   position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
@@ -685,7 +686,7 @@ body.rr-on { padding-bottom: 130px; }
 
 [hidden] { display: none !important; }
 
-/* --- nahrady za ikonky, ktere LCU pres HTTP neda --- */
+/* --- stand-ins for icons the LCU does not serve over HTTP --- */
 
 .w-dot {
   width: 10px; height: 10px; border-radius: 2px;
@@ -700,7 +701,7 @@ body.rr-on { padding-bottom: 130px; }
   background: linear-gradient(140deg, #0c1723, #060a0e);
 }
 
-/* --- penezenka jako v klientovi: ikona + cislo --- */
+/* --- the wallet as in the client: icon + number --- */
 
 .wallet { gap: 6px; }
 .w-item {
@@ -712,7 +713,7 @@ body.rr-on { padding-bottom: 130px; }
 .w-item b { font-size: 14px; }
 .w-dot { width: 10px; height: 10px; background: var(--text-dim); transform: rotate(45deg); }
 
-/* --- skupiny shardy / permanenty --- */
+/* --- the shards / permanents groups --- */
 
 .groups { display: flex; flex-direction: column; gap: 26px; }
 
@@ -732,7 +733,7 @@ body.rr-on { padding-bottom: 130px; }
 .group-permanenty .group-head h3 { color: var(--gold); }
 .group-permanenty .group-head { border-bottom-color: rgba(200,170,110,.35); }
 
-/* --- odznak shard vs permanent --- */
+/* --- the shard vs permanent badge --- */
 
 .card-badge {
   position: absolute; bottom: 6px; left: 6px;
@@ -752,7 +753,7 @@ body.rr-on { padding-bottom: 130px; }
   pointer-events: none;
 }
 
-/* --- testovaci bedna: at je na prvni pohled jasne, ze je to simulace --- */
+/* --- the test chest: make it obvious at a glance that it is a simulation --- */
 
 .card-test {
   border-style: dashed; border-color: rgba(169,92,255,.55);
@@ -763,7 +764,7 @@ body.rr-on { padding-bottom: 130px; }
 .card-badge.is-test { color: var(--sim); border-color: rgba(169,92,255,.6); }
 .card-test .card-actions button:hover:not(:disabled) { border-color: var(--sim); color: #d9bfff; }
 
-/* --- filtry v tabech --- */
+/* --- filters in the tabs --- */
 
 .filterbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -779,7 +780,7 @@ body.rr-on { padding-bottom: 130px; }
 .f-count { color: var(--text-dim); font-size: 12px; }
 .r-DEFAULT { background: var(--r-default); }
 
-/* --- uklid inventare --- */
+/* --- inventory clean up --- */
 
 .cleanup-btn { margin-left: auto; }
 .tabs .cleanup-btn + #refresh { margin-left: 0; }
@@ -833,7 +834,7 @@ body.rr-on { padding-bottom: 130px; }
 .essence img { width: 20px; height: 20px; object-fit: contain; }
 .essence.is-zero { color: var(--text-dim); }
 
-/* --- statistiky --- */
+/* --- statistics --- */
 
 .stat em { display: block; font-style: normal; font-size: 12px; color: var(--teal); margin-top: 2px; }
 .stat-wide { grid-column: span 2; }
@@ -859,7 +860,7 @@ body.rr-on { padding-bottom: 130px; }
 .bar-row b { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
 .history-title { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin: 0 0 10px; }
 
-/* --- kolekce --- */
+/* --- the collection --- */
 
 .col-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin-bottom: 18px; }
 .col-kind {
@@ -906,13 +907,13 @@ body.rr-on { padding-bottom: 130px; }
 .col-sub { padding: 0 8px 7px; font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-name:last-child { padding-bottom: 7px; }
 
-/* na uzkem displeji se siroka dlazdice nesmi roztahnout do druheho sloupce */
+/* on a narrow display a wide tile must not stretch into a second column */
 @media (max-width: 420px) {
   .stat-wide { grid-column: auto; }
   .cl-items { margin-left: 0; }
 }
 
-/* --- nastaveni, uvodni upozorneni, pravni paticka --- */
+/* --- settings, the first-start notice, the legal footer --- */
 
 a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .settings-btn { flex: 0 0 auto; }
@@ -945,7 +946,7 @@ a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; 
 .legal p { margin: 0 0 8px; }
 .legal b { color: var(--text); font-weight: 600; }
 
-/* --- hvezdicka: chraneny shard --- */
+/* --- the star: a protected shard --- */
 
 .fav-box {
   position: absolute; right: 6px; bottom: 9px; z-index: 4;
@@ -961,7 +962,7 @@ a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; 
 .card.is-fav { border-color: rgba(200,170,110,.7); }
 .cl-starred { color: var(--gold); font-size: 12px; margin-left: 6px; }
 
-/* --- penezenka: kratky zablesk zmeny --- */
+/* --- the wallet: a short flash when it changes --- */
 
 .w-item { position: relative; }
 .w-item.is-up b   { animation: wallet-up 1.6s ease-out; }
@@ -981,7 +982,7 @@ a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; 
   100% { opacity: 0; transform: translateY(-10px); }
 }
 
-/* --- otevrit vse: prubeh --- */
+/* --- open all: progress --- */
 
 .reveal-progress {
   display: flex; align-items: center; gap: 12px; justify-content: center;
@@ -991,7 +992,7 @@ a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; 
 .reveal-progress-track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7d6a43, var(--gold)); transition: width .35s ease; }
 #reveal-progress-text { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* --- nova verze --- */
+/* --- a new version --- */
 
 .update-pill {
   flex: 0 0 auto; padding: 5px 12px; border-radius: 12px; text-decoration: none; white-space: nowrap;
@@ -1001,7 +1002,7 @@ a.ghost-btn { text-decoration: none; display: inline-flex; align-items: center; 
 .update-pill:hover { background: #3fe0d3; }
 .set-check + .set-status { margin: 8px 0 0 29px !important; }
 
-/* --- uvodni obrazovka: pripojovani ke klientovi --- */
+/* --- the connection screen --- */
 
 body.boot-open { overflow-y: hidden; }
 .boot {
@@ -1067,19 +1068,19 @@ body.boot-open { overflow-y: hidden; }
   50%      { transform: rotate(45deg) scale(1.08); box-shadow: 0 0 46px rgba(200,170,110,.7); }
 }
 
-/* klient nebezi: vsechno zpomali a ztlumi, jako by cekalo */
+/* the client is not running: everything slows down and dims, as if waiting */
 .boot.is-waiting .boot-r1 { animation-duration: 5s; border-top-color: rgba(200,170,110,.6); }
 .boot.is-waiting .boot-r2 { animation-duration: 4s; }
 .boot.is-waiting .boot-orbit { animation-duration: 7s; opacity: .6; }
 .boot.is-waiting .boot-core { animation-duration: 3s; }
 .boot.is-searching .boot-status::after { content: ''; }
 
-/* server neodpovida */
+/* the server does not answer */
 .boot.is-stopped .boot-ring, .boot.is-stopped .boot-orbit { animation-play-state: paused; opacity: .3; }
 .boot.is-stopped .boot-core { animation: none; border-color: var(--danger); box-shadow: 0 0 30px rgba(214,77,77,.35); }
 .boot.is-stopped .boot-status { color: #ffb3b3; }
 
-/* pripojeno: prstence se stahnou do jadra, jadro zableskne, razova vlna, fajfka */
+/* connected: the rings collapse into the core, it flashes, a shockwave, a tick */
 .boot.is-connected .boot-r1 { animation: boot-collapse .65s cubic-bezier(.55,0,.3,1) forwards; }
 .boot.is-connected .boot-r2 { animation: boot-collapse .6s .06s cubic-bezier(.55,0,.3,1) forwards; }
 .boot.is-connected .boot-r3 { animation: boot-expand .8s ease-out forwards; }
@@ -1116,7 +1117,7 @@ body.boot-open { overflow-y: hidden; }
   .boot, .boot * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; animation-delay: 0s !important; }
 }
 
-/* --- obchod: patri chroma ke skinu, ktery mam? --- */
+/* --- the shop: does this chroma belong to a skin I own? --- */
 
 .shop-card[data-shop-skin] { cursor: zoom-in; }
 .shop-need {
@@ -1128,5 +1129,5 @@ body.boot-open { overflow-y: hidden; }
 .shop-need.is-ok { color: #6fe3b6; border-color: color-mix(in srgb, var(--owned) 45%, var(--line)); }
 .shop-need.is-missing { color: #ffb3b3; border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 
-/* chroma, ktera je prave v mythic shopu - ne "no longer available" */
+/* a chroma that is in the Mythic Shop right now - not "no longer available" */
 .chroma-note.is-shop { color: var(--r-mythic); }

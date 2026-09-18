@@ -2,13 +2,14 @@
 'use strict';
 
 /**
- * LootForge - lokalni most mezi prohlizecem a League klientem (LCU).
+ * LootForge - the local bridge between the browser and the League client (LCU).
  *
- * Prohlizec se k LCU nedostane sam: bezi na nahodnem portu, ma self-signed
- * certifikat a chce Basic auth s tokenem, ktery zna jen bezici klient.
- * Tenhle server credentials najde, drzi je u sebe a proxuje /lcu/* dal.
+ * The browser cannot reach the LCU on its own: it runs on a random port, has a
+ * self-signed certificate and wants Basic auth with a token only the running
+ * client knows. This server finds those credentials, keeps them to itself and
+ * proxies /lcu/* through.
  *
- * Zadne zavislosti. `node server.js` a hotovo.
+ * No dependencies. `node server.js` and that is it.
  */
 
 const http = require('http');
@@ -18,24 +19,25 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 
 /*
- * Jako LootForge.exe (Node single executable application) jsou public/ a
- * package.json zabalene uvnitr exe a ctou se pres node:sea, ne z disku.
- * `require('./package.json')` tam nejde - exe umi require jen vestavene moduly.
+ * As LootForge.exe (a Node single executable application) public/ and
+ * package.json are bundled inside the exe and read through node:sea, not from
+ * disk. `require('./package.json')` does not work there - the exe can only
+ * require built-in modules.
  */
 const sea = (() => {
   try { const s = require('node:sea'); return s.isSea() ? s : null; } catch (_) { return null; }
 })();
 
-/** Soubor appky podle cesty s lomitky ("public/app.js") - z exe, nebo z disku. */
+/** An app file by its slash path ("public/app.js") - from the exe, or from disk. */
 function readAppFile(rel) {
   if (sea) return Buffer.from(sea.getAsset(rel));
   return fs.readFileSync(path.join(__dirname, ...rel.split('/')));
 }
 
 /*
- * Exe bezi bez konzole (build prepne subsystem na Windows GUI). Vypisy proto
- * jdou do %LOCALAPPDATA%\LootForge\lootforge.log - bez nich by nebylo jak
- * zjistit, proc se neco nepovedlo.
+ * The exe runs without a console (the build switches the subsystem to Windows
+ * GUI). Its output therefore goes to %LOCALAPPDATA%\LootForge\lootforge.log -
+ * without it there would be no way to find out why something failed.
  */
 const LOG_FILE = sea ? path.join(process.env.LOCALAPPDATA || require('os').tmpdir(), 'LootForge', 'lootforge.log') : null;
 if (LOG_FILE) {
@@ -46,7 +48,7 @@ if (LOG_FILE) {
     const write = (...args) => log.write(`[${new Date().toISOString()}] ${format(...args)}\n`);
     console.log = write;
     console.error = write;
-  } catch (_) { /* bez logu to pobezi taky */ }
+  } catch (_) { /* it will run without the log too */ }
 }
 
 const PORT = Number(process.env.PORT) || 4545;
@@ -55,8 +57,8 @@ const VERSION = PKG.version;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 /**
- * "owner/repo" z package.json pro kontrolu novych verzi. Dokud je tam zastupny
- * nazev (YOUR-GITHUB-NAME), vraci null a kontrola se nedela.
+ * "owner/repo" from package.json for the update check. While the placeholder
+ * name (YOUR-GITHUB-NAME) is there it returns null and nothing is checked.
  */
 function releaseRepo() {
   const url = String((PKG.repository && PKG.repository.url) || PKG.repository || '');
@@ -65,8 +67,8 @@ function releaseRepo() {
   return `${m[1]}/${m[2]}`;
 }
 
-// Cesty pres path.join, ne jako retezec: 'C:\Riot Games' je v JS "C:Riot Games"
-// (\R neni escape) - driv to tu tak bylo a zaloha pres lockfile tise nefungovala.
+// Paths through path.join, not as a string: 'C:\Riot Games' is "C:Riot Games" in JS
+// (\R is not an escape) - it used to be written that way and the lockfile fallback quietly never worked.
 const LOCKFILES = [
   path.join('C:', path.sep, 'Riot Games', 'League of Legends', 'lockfile'),
   path.join('D:', path.sep, 'Riot Games', 'League of Legends', 'lockfile'),
@@ -75,15 +77,15 @@ const LOCKFILES = [
 
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
 
-// Obrazky ze hry se mezi patchi nemeni, ale LCU u nich posila `no-cache`.
-// Bez prepsani by je prohlizec revalidoval pri kazdem roztoceni rulety -
-// a ta stavi 58 dlazdic na pas.
+// Game images do not change between patches, but the LCU sends `no-cache` with them.
+// Without overriding it the browser would revalidate them on every spin of the
+// roulette - and that builds 58 tiles per reel.
 const GAME_ASSETS = /^\/lol-game-data\/assets\//i;
 
 let creds = null;          // { port, token, source }
-let discovering = null;    // rozpracovany discovery slib (aby nebezel 5x paralelne)
+let discovering = null;    // a discovery promise in flight (so it does not run five times in parallel)
 
-// --- hledani credentials -----------------------------------------------
+// --- finding the credentials -------------------------------------------
 
 function fromLockfile() {
   for (const file of LOCKFILES) {
@@ -93,7 +95,7 @@ function fromLockfile() {
       if (parts.length >= 4 && parts[2] && parts[3]) {
         return { port: Number(parts[2]), token: parts[3], source: file };
       }
-    } catch (_) { /* neni tam, zkousime dal */ }
+    } catch (_) { /* not there, try the next one */ }
   }
   return null;
 }
@@ -116,7 +118,7 @@ function fromProcessList() {
   });
 }
 
-/** Overi, ze credentials fakt fungujou (klient mohl mezitim spadnout). */
+/** Checks that the credentials really work (the client may have crashed since). */
 function ping(c) {
   return new Promise((resolve) => {
     const req = https.request({
@@ -144,7 +146,7 @@ async function getCreds() {
   if (discovering) return discovering;
 
   discovering = (async () => {
-    // lockfile je levny, process scan spolehlivy - zkusime v tomhle poradi
+    // the lockfile is cheap, the process scan reliable - try them in that order
     let found = fromLockfile();
     if (!found || !(await ping(found))) found = await fromProcessList();
     if (found && !(await ping(found))) found = null;
@@ -160,7 +162,7 @@ async function getCreds() {
 // --- proxy --------------------------------------------------------------
 
 function proxyToLcu(req, res, c) {
-  const target = req.url.slice(4) || '/';   // odrizne "/lcu"
+  const target = req.url.slice(4) || '/';   // cuts off "/lcu"
   const headers = { Authorization: basic(c), Accept: req.headers.accept || 'application/json' };
   if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
 
@@ -179,23 +181,24 @@ function proxyToLcu(req, res, c) {
   });
 
   upstream.on('error', (err) => {
-    creds = null;   // pristi request si sahne pro nove
+    creds = null;   // the next request will fetch new ones
     sendJson(res, 502, { error: 'lcu_unreachable', detail: err.message });
   });
 
   req.pipe(upstream);
 }
 
-// --- zive aktualizace ---------------------------------------------------
+// --- live updates -------------------------------------------------------
 
 /**
- * Prohlizec drzi otevreny SSE kanal a server mu hlasi, kdyz se loot zmenil.
- * Zmenu zjistujeme kratkym dotazem na klienta kazde dve vteriny.
+ * The browser keeps an SSE channel open and the server tells it when the loot
+ * changed. The change is found with a short request to the client every two
+ * seconds.
  *
- * Proc ne WebSocket na LCU event stream: Node nema vestaveneho WS klienta a
- * rucne psany RFC6455 (handshake, maskovani, parsovani ramcu) by byl zdaleka
- * nejkrehcejsi kus tohohle projektu. Dotaz na localhost stoji nic a vysledek
- * je pro uzivatele stejny.
+ * Why not a WebSocket on the LCU event stream: Node has no built-in WS client
+ * and a hand-written RFC6455 (handshake, masking, frame parsing) would be by
+ * far the most fragile piece of this project. A request to localhost costs
+ * nothing and the result is the same for the user.
  */
 
 const sseClients = new Set();
@@ -226,7 +229,7 @@ function lcuGetJson(path) {
   });
 }
 
-/** Levny otisk inventare - staci vedet, ze se neco zmenilo. */
+/** A cheap fingerprint of the inventory - it is enough to know something changed. */
 function fingerprint(loot) {
   return (loot || [])
     .filter((i) => i.lootId)
@@ -244,7 +247,7 @@ function sseSend(event, data) {
 
 async function pollOnce() {
   let loot = null;
-  try { loot = await lcuGetJson('/lol-loot/v1/player-loot'); } catch (_) { /* klient nebezi */ }
+  try { loot = await lcuGetJson('/lol-loot/v1/player-loot'); } catch (_) { /* the client is not running */ }
 
   const connected = Array.isArray(loot);
   if (connected !== lastConnected) {
@@ -274,11 +277,12 @@ function stopPollingIfIdle() {
 }
 
 /*
- * Bez konzole neni co zavrit. Exe proto skonci samo, kdyz neni otevrena zadna
- * zalozka LootForge (kazda drzi SSE spojeni): po IDLE_EXIT_MS od zavreni posledni
- * a po START_GRACE_MS od spusteni, kdyby se prohlizec vubec neotevrel.
- * Obnoveni stranky spojeni jen na chvilku prerusi - na to je rezerva.
- * `node server.js` bezi dal jako driv (zapnout jde LOOTFORGE_AUTO_EXIT=1).
+ * Without a console there is nothing to close. The exe therefore quits by
+ * itself when no LootForge tab is open (each one holds an SSE connection):
+ * IDLE_EXIT_MS after the last one closes, and START_GRACE_MS after startup in
+ * case the browser never opened at all. Reloading the page only interrupts the
+ * connection for a moment - that is what the grace period is for.
+ * `node server.js` keeps running as before (LOOTFORGE_AUTO_EXIT=1 turns it on).
  */
 const AUTO_EXIT = sea ? process.env.LOOTFORGE_STAY !== '1' : process.env.LOOTFORGE_AUTO_EXIT === '1';
 const IDLE_EXIT_MS = Number(process.env.LOOTFORGE_IDLE_EXIT_MS) || 30000;
@@ -316,16 +320,17 @@ function handleEvents(req, res) {
   });
 }
 
-// --- mythic shop ----------------------------------------------------------
+// --- Mythic Shop ----------------------------------------------------------
 
 /*
- * Mythic shop neni v loot receptech - bydli v novem obchodnim systemu Riotu
- * (lol-shoppefront) jako obchody MYTHIC_SHOPPE_* (featured, dvoutydenni,
- * tydenni a denni rotace). Polozky tam nemaji obrazky, jen contentId, ktere
- * se paruje na herni data (skiny, chromy, ikony, emoty).
+ * The Mythic Shop is not in the loot recipes - it lives in Riot's newer store
+ * system (lol-shoppefront) as MYTHIC_SHOPPE_* stores (featured, biweekly,
+ * weekly and daily rotations). The entries have no images there, only a
+ * contentId, which is matched against game data (skins, chromas, icons, emotes).
  *
- * Obchody maji ~1 MB a herni data ~8,5 MB. Do prohlizece jde jen maly prehled
- * a herni data se drzi v pameti, dokud se klient nerestartuje (jiny port).
+ * The stores are ~1 MB and the game data ~8.5 MB. Only a small summary goes to
+ * the browser and the game data stays in the server's memory until the client
+ * restarts (a different port).
  */
 
 let shopIndex = null;   // { port, byContent: Map }
@@ -347,14 +352,14 @@ async function gameIndex(port) {
   const championNames = {};
   const add = (cid, value) => { if (cid) byContent.set(String(cid).toLowerCase(), value); };
 
-  // pro kolekci: jmeno a obrazek ke kazdemu id z inventare
+  // for the collection: a name and an image for every id from the inventory
   const meta = { chroma: new Map(), icon: new Map(), emote: new Map(), ward: new Map(), finisher: new Map() };
 
-  for (const ch of champions || []) if (ch.id > 0 && ch.id < 1000) championNames[ch.id] = ch.name;   // bez Jade (60001+)
+  for (const ch of champions || []) if (ch.id > 0 && ch.id < 1000) championNames[ch.id] = ch.name;   // without Jade (60001+)
 
   for (const sk of Object.values(skins || {})) {
-    // uncentered = cely originalni splash art (1215x717). "splashPath" je
-    // priblizeny s rozmazanym pozadim a "tilePath" jen ctvercovy vyrez.
+    // uncentered = the whole original splash art (1215x717). "splashPath" is the
+    // zoomed one with a blurred background and "tilePath" only a square crop.
     skinById.set(sk.id, {
       id: sk.id,
       name: sk.isBase ? championNames[Math.floor(sk.id / 1000)] || sk.name : sk.name,
@@ -367,11 +372,11 @@ async function gameIndex(port) {
     add(sk.contentId, {
       kind: 'skin', img: sk.tilePath || sk.splashPath || '',
       rarity: SKIN_RARITY[sk.rarity] || 'DEFAULT',
-      splash: sk.uncenteredSplashPath || '',   // cela kresba pro obrad po nakupu
-      skinId: sk.id,                           // aby sel v obchode otevrit nahled
+      splash: sk.uncenteredSplashPath || '',   // the full artwork for the ceremony after a purchase
+      skinId: sk.id,                           // so the shop can open a preview
     });
     for (const ch of sk.chromas || []) {
-      // u chromy je klicove, na jaky skin patri: bez nej je k nicemu
+      // for a chroma the skin it belongs to is the key part: without it the chroma is useless
       add(ch.contentId, {
         kind: 'chroma', img: ch.chromaPath || ch.tilePath || '', rarity: 'DEFAULT',
         chromaId: ch.id, skinId: sk.id,
@@ -389,7 +394,7 @@ async function gameIndex(port) {
   }
   for (const em of emotes || []) {
     add(em.contentId, { kind: 'emote', img: em.inventoryIcon || '', rarity: 'DEFAULT' });
-    // par emotu nema obrazek ("/lol-game-data/assets/") - radsi bez nej nez 404
+    // a few emotes have no image ("/lol-game-data/assets/") - better none than a 404
     if (em.name) meta.emote.set(em.id, { name: em.name, img: /\.(png|jpe?g)$/i.test(em.inventoryIcon || '') ? em.inventoryIcon : '' });
   }
   for (const w of wards || []) meta.ward.set(w.id, { name: w.name, img: w.wardImagePath || '' });
@@ -404,7 +409,7 @@ const SKIN_RARITY = {
   kMythic: 'MYTHIC', kUltimate: 'ULTIMATE', kTranscendent: 'TRANSCENDENT', kExalted: 'EXALTED',
 };
 
-// poradi a cesky popisek rotaci; obchod se pozna podle nazvu
+// the order and the label of each rotation; a store is recognised by its name
 const SHOP_ROTATIONS = [
   [/FEATURED/i, 'Featured'],
   [/BIWEEKLY/i, 'Biweekly rotation'],
@@ -430,7 +435,7 @@ async function mythicShop(creds) {
       const entries = (st.catalogEntries || []).map((e) => {
         const unit = (e.purchaseUnits || [])[0] || {};
         const f = unit.fulfillment || {};
-        // jen platba mythic esenci - jine meny tu neresime
+        // Mythic Essence payments only - other currencies are out of scope here
         const option = (unit.paymentOptions || []).find((o) =>
           (o.payments || []).some((pay) => pay.name === 'lol_mythic_essence'));
         if (!option) return null;
@@ -460,16 +465,16 @@ async function mythicShop(creds) {
   return { stores };
 }
 
-// --- vlastnene skiny ------------------------------------------------------
+// --- owned skins ----------------------------------------------------------
 
 /*
- * Ktere skiny hrac vlastni, seskupene podle sampiona. Zdroj je
- * /lol-champions/v1/inventories/{summonerId}/skins-minimal (~1,7 MB, vsechny
- * skiny hry s vlastnictvim). Overeno proti inventari klienta: bez chrom, bez
- * pujcenych, vernostnich i Xbox skinu. Zakladni skin se nepocita.
+ * Which skins the player owns, grouped by champion. The source is
+ * /lol-champions/v1/inventories/{summonerId}/skins-minimal (~1.7 MB, every skin
+ * in the game with ownership). Checked against the client's inventory: no
+ * chromas, no rentals, loyalty or Xbox skins. The base skin does not count.
  *
- * Vlastnictvi se necachuje (meni se rerollem, odemknutim, nakupem), jen
- * summonerId a rarity z hernich dat.
+ * Ownership is not cached (a reroll, an unlock or a purchase changes it), only
+ * the summonerId and the rarities from game data are.
  */
 
 let summonerCache = null;   // { port, id }
@@ -479,7 +484,7 @@ async function ownedSkins(creds) {
     const me = await lcuGetJson('/lol-summoner/v1/current-summoner');
     summonerCache = { port: creds.port, id: me.summonerId };
   }
-  await gameIndex(creds.port);   // kvuli raritam
+  await gameIndex(creds.port);   // for the rarities
   const all = await lcuGetJson(`/lol-champions/v1/inventories/${summonerCache.id}/skins-minimal`);
 
   const rank = ['DEFAULT', 'EPIC', 'LEGENDARY', 'MYTHIC', 'ULTIMATE', 'TRANSCENDENT', 'EXALTED'];
@@ -489,9 +494,9 @@ async function ownedSkins(creds) {
     const o = sk.ownership || {};
     const rental = o.rental || {};
     if (!o.owned || sk.isBase || rental.rented || o.loyaltyReward || o.xboxGPReward) continue;
-    // "Jade" verze (project_jade, sampioni Jade_Annie s id 60001+) jsou z jineho
-    // produktu Riotu sdileneho inventare - vetsinou duplikaty normalnich skinu.
-    // Sampioni League maji id pod 1000.
+    // The "Jade" versions (project_jade, champions Jade_Annie with id 60001+) come
+    // from another Riot product with a shared inventory - mostly duplicates of the
+    // normal skins. League champions have ids below 1000.
     if (sk.championId >= 1000) continue;
     const art = shopIndex.skinById.get(sk.id);
     (byChampion[sk.championId] = byChampion[sk.championId] || []).push({
@@ -509,20 +514,21 @@ async function ownedSkins(creds) {
   return { total, byChampion, champions: shopIndex.championNames };
 }
 
-// --- kolekce --------------------------------------------------------------
+// --- collection -----------------------------------------------------------
 
 /*
- * Vsechno, co hrac vlastni: sampioni, skiny, chromy, ikony, emoty, wardy a
- * Nexus finishery. Zdroj je inventar klienta (/lol-inventory/v2/inventory/{typ}),
- * jmena a obrazky z hernich dat. Pocita se jen skutecne vlastnene
- * (owned + ownershipType OWNED): bez F2P rotace, vernostnich a pujcenych.
- * Skiny a chromy jsou v inventari pod jednim typem CHAMPION_SKIN - rozlisi je
- * az herni data. Jade (sampioni 1000+) se vynechava stejne jako jinde.
+ * Everything the player owns: champions, skins, chromas, icons, emotes, wards
+ * and Nexus Finishers. The source is the client's inventory
+ * (/lol-inventory/v2/inventory/{type}), the names and images come from game
+ * data. Only what is really owned counts (owned + ownershipType OWNED): no F2P
+ * rotation, no loyalty rewards, no rentals. Skins and chromas share the single
+ * CHAMPION_SKIN type in the inventory - only game data tells them apart. Jade
+ * (champions 1000+) is left out as everywhere else.
  */
 
 const COLLECTION_TYPES = ['CHAMPION', 'CHAMPION_SKIN', 'SUMMONER_ICON', 'EMOTE', 'WARD_SKIN', 'NEXUS_FINISHER'];
 
-/** "20241215T162409.000Z" -> ms; prazdne datum -> 0 */
+/** "20241215T162409.000Z" -> ms; an empty date -> 0 */
 function inventoryDate(s) {
   const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(String(s || ''));
   return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : 0;
@@ -566,11 +572,11 @@ async function collection(creds) {
   };
   simple(icons, meta.icon, 'icons');
   simple(emotes, meta.emote, 'emotes');
-  simple(wards.filter((i) => i.itemId !== 0), meta.ward, 'wards');   // 0 = zakladni ward
+  simple(wards.filter((i) => i.itemId !== 0), meta.ward, 'wards');   // 0 = the default ward
   simple(finishers, meta.finisher, 'finishers');
   for (const c of out.champions) c.skins = skinCount[c.id] || 0;
 
-  // kolik toho ve hre celkem je - na procenta sbirky
+  // how much of it there is in the game - for the collection percentages
   let skinTotal = 0;
   let chromaTotal = 0;
   for (const sk of skinById.values()) if (!sk.isBase && sk.championId < 1000) skinTotal++;
@@ -584,17 +590,18 @@ async function collection(creds) {
   return { totals, ...out, championNames };
 }
 
-// --- straz ---------------------------------------------------------------
+// --- the guard ------------------------------------------------------------
 
 /*
- * Server posloucha jen na 127.0.0.1, ale to nestaci: kazda stranka otevrena
- * v prohlizeci muze na localhost poslat request. POST s Content-Type text/plain
- * je pro prohlizec "simple request" - projde bez CORS preflightu - a proxy by
- * ho poslusne predala klientovi. Cizi web by tak mohl naslepo rozkladat loot.
+ * The server listens on 127.0.0.1 only, but that is not enough: any page open
+ * in the browser can send a request to localhost. A POST with Content-Type
+ * text/plain is a "simple request" for the browser - it goes through without a
+ * CORS preflight - and the proxy would dutifully pass it to the client. A
+ * foreign site could disenchant loot blindly that way.
  *
- *  - Host musi byt nase adresa   -> brani DNS rebindingu (cizi domena presmerovana na 127.0.0.1)
- *  - zapis jen z nasi stranky    -> prohlizec u POST vzdy posle Origin, cizi web ho nepodvrhne
- *  - zapis jen jako JSON         -> JSON vynuti preflight, simple request uz neprojde
+ *  - the Host must be our address -> stops DNS rebinding (a foreign domain pointed at 127.0.0.1)
+ *  - writes only from our page     -> browsers always send Origin on a POST, and a foreign site cannot forge it
+ *  - writes only as JSON           -> JSON forces a preflight, so a simple request no longer gets through
  */
 
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
@@ -621,7 +628,7 @@ function guard(req, res) {
   return true;
 }
 
-// --- staticke soubory ---------------------------------------------------
+// --- static files ---------------------------------------------------------
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -633,14 +640,14 @@ const MIME = {
 function serveStatic(req, res) {
   const rel = decodeURIComponent(req.url.split('?')[0]);
   const file = path.normalize(path.join(PUBLIC_DIR, rel === '/' ? 'index.html' : rel));
-  // s oddelovacem: samotne startsWith(PUBLIC_DIR) by pustilo i slozku "public-cokoliv"
+  // with the separator: startsWith(PUBLIC_DIR) alone would also allow a "public-anything" folder
   if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) {
     return sendJson(res, 403, { error: 'forbidden' });
   }
 
   let data;
   try {
-    // az po kontrole cesty; v exe klic assetu, jinak soubor na disku
+    // only after the path check; an asset key in the exe, a file on disk otherwise
     data = readAppFile(path.relative(__dirname, file).split(path.sep).join('/'));
   } catch (_) {
     return sendJson(res, 404, { error: 'not_found', path: rel });
@@ -658,7 +665,7 @@ function sendJson(res, code, obj) {
   res.end(body);
 }
 
-// --- server -------------------------------------------------------------
+// --- the server -----------------------------------------------------------
 
 const server = http.createServer(async (req, res) => {
   if (!guard(req, res)) return;
@@ -671,14 +678,14 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === '/api/events') return handleEvents(req, res);
 
-  // licence i v exe, kde neni zadny soubor vedle - odkaz je v paticce appky
+  // the licence inside the exe too, where no file sits next to it - the app's footer links to it
   if (req.url === '/LICENSE') {
     const body = readAppFile('LICENSE');
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length });
     return res.end(body);
   }
 
-  // detail jednoho skinu (i zakladniho = sampion): cely splash, jmeno, rarita
+  // details of a single skin (a base one = the champion): full splash, name, rarity
   const skinMatch = /^\/api\/skin\/(\d{1,7})$/.exec(req.url);
   if (skinMatch) {
     const c = await getCreds();
@@ -732,16 +739,16 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res);
 });
 
-/** Otevre appku ve vychozim prohlizeci - jen kdyz o to launcher pozadal (OPEN_BROWSER=1). */
+/** Opens the app in the default browser - only when the launcher asked for it (OPEN_BROWSER=1). */
 function openBrowser() {
-  // exe se spousti dvojklikem, takze tam prohlizec otevirame sami (OPEN_BROWSER=0 vypne)
+  // the exe is started by a double click, so it opens the browser itself (OPEN_BROWSER=0 turns that off)
   const wanted = process.env.OPEN_BROWSER === undefined ? !!sea : process.env.OPEN_BROWSER === '1';
   if (!wanted) return;
   const url = `http://127.0.0.1:${PORT}`;
   try {
     if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     else spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
-  } catch (_) { /* adresa je vypsana v konzoli */ }
+  } catch (_) { /* the address is printed in the console */ }
 }
 
 server.on('error', (err) => {
@@ -757,7 +764,7 @@ server.on('error', (err) => {
     console.error('  Could not start the server:', err.message);
     console.error('');
   }
-  // chvilka na otevreni prohlizece a zapis logu
+  // a moment for the browser to open and the log to be written
   setTimeout(() => process.exit(1), sea ? 1500 : 300);
 });
 

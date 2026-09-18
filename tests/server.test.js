@@ -1,11 +1,13 @@
 'use strict';
 
 /*
- * Server: otisk inventare pro zive aktualizace, prepis cache hlavicek
- * a hlavne ochrana - ze se k proxy nedostane nic jineho nez appka sama.
+ * The server: the inventory fingerprint for live updates, the rewritten cache
+ * headers and above all the guard - that nothing but the app itself gets to the
+ * proxy.
  *
- * Zive sondy posilaji POST jen na NEEXISTUJICI cestu v LCU. Kdyz straz
- * selze, request dojde do klienta a ten odpovi 404 - na uctu se nic nestane.
+ * The live probes only POST to a path that does NOT exist in the LCU. If the
+ * guard failed, the request would reach the client and get a 404 - nothing
+ * happens to the account.
  */
 
 const fs = require('fs');
@@ -19,7 +21,7 @@ const url = new URL(BASE);
 const OUR_ORIGIN = `http://${url.hostname}:${url.port}`;
 const HARMLESS = '/lcu/lol-loot/v1/lootforge-test-neexistuje';
 
-/** Syrovy request - fetch nedovoli podvrhnout hlavicku Host. */
+/** A raw request - fetch does not allow the Host header to be forged. */
 function raw(method, pathname, headers = {}, body) {
   return new Promise((resolve) => {
     const req = http.request({

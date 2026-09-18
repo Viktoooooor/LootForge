@@ -1,10 +1,12 @@
-/* Testovaci bedna - CISTA SIMULACE.
+/* The test chest - PURE SIMULATION.
  *
- * Nesaha na ucet. Neposila zadny craft, nic neotevira, nic neutraci.
- * Slouzi jen k ladeni reveal animace, kdyz zrovna nemas co otevirat.
+ * It never touches the account. It sends no craft, opens nothing and spends
+ * nothing. It exists to work on the reveal animation when there is nothing real
+ * to open.
  *
- * Odmeny se losuji z realnych dat klienta (skiny, sampioni, jejich artwork
- * a rarity), takze reveal vypada presne jako ostry - jen se nic nestalo.
+ * The rewards are rolled from real client data (skins, champions, their artwork
+ * and rarities), so the reveal looks exactly like the real thing - except that
+ * nothing happened.
  */
 
 'use strict';
@@ -13,8 +15,8 @@ globalThis.TestChest = (function () {
 
   const LOOT_ID = 'TEST_CHEST';
 
-  // Zjednodusena tabulka dropu. Neni to oficialni Riot rozpiska, jen rozumny
-  // odhad, at simulace vypada zivotne. Chces jine pomery? Prepis vahy tady.
+  // A simplified drop table. These are not official Riot odds, just a reasonable
+  // a guess, so the simulation feels alive. Want different odds? Change the weights here.
   const DROP_TABLE = [
     { weight: 50, kind: 'skin' },
     { weight: 25, kind: 'champion' },
@@ -32,10 +34,10 @@ globalThis.TestChest = (function () {
 
   const ART = '/lcu/lol-game-data/assets/ASSETS/Loot/';
 
-  let champions = null;              // seznam ze champion-summary.json
-  const champCache = new Map();      // id -> detail se skiny
+  let champions = null;              // the list from champion-summary.json
+  const champCache = new Map();      // id -> details with the skins
 
-  // --- data z klienta ---------------------------------------------------
+  // --- data from the client ---------------------------------------------
 
   async function get(path) {
     const res = await fetch('/lcu' + path);
@@ -46,9 +48,9 @@ globalThis.TestChest = (function () {
   async function loadChampions() {
     if (champions) return champions;
     const all = await get('/lol-game-data/assets/v1/champion-summary.json');
-    // jen sampioni League (id pod 1000). Seznam obsahuje i "Jade" verze
-    // (Jade_Veigar 60045) z jineho produktu Riotu - jejich skiny maji jina id,
-    // takze by se k nim nenasly hracovy skiny ani cela kresba.
+    // League champions only (id below 1000). The list also holds "Jade" versions
+    // (Jade_Veigar 60045) from another Riot product - their skins have different ids,
+    // so neither the player's skins nor the full artwork would be found for them.
     champions = all.filter((c) => c.id > 0 && c.id < 1000);
     return champions;
   }
@@ -61,10 +63,10 @@ globalThis.TestChest = (function () {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const between = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
-  // --- jednotlive druhy odmen -------------------------------------------
+  // --- the individual kinds of reward -----------------------------------
 
   async function rollSkin(onlyRare) {
-    // par pokusu: ne kazdy sampion ma legendarku, natoz ultimate skin
+    // a few tries: not every champion has a legendary, let alone an ultimate skin
     for (let tries = 0; tries < (onlyRare ? 14 : 4); tries++) {
       const champ = pick(await loadChampions());
       const detail = await champDetail(champ.id);
@@ -81,7 +83,7 @@ globalThis.TestChest = (function () {
         type: 'SKIN_RENTAL',
         count: 1,
         lootId: 'TEST_SKIN_' + skin.id,
-        splash: skin.splashPath ? '/lcu' + skin.splashPath : '',   // jako splashPath v lootu
+        splash: skin.splashPath ? '/lcu' + skin.splashPath : '',   // same as splashPath in the loot
       };
     }
     return rollChampion();
@@ -123,7 +125,7 @@ globalThis.TestChest = (function () {
     }
   }
 
-  // --- testovaci shardy a simulace akci ---------------------------------
+  // --- test shards and simulated actions --------------------------------
 
   const SHARD_IDS = ['TEST_SKIN_SHARD_1', 'TEST_SKIN_SHARD_2', 'TEST_SKIN_SHARD_3'];
   const CHAMP_ID = 'TEST_CHAMPION_SHARD';
@@ -139,14 +141,14 @@ globalThis.TestChest = (function () {
       upgradeEssenceValue: skin ? 1350 : 1440,
       upgradeEssenceName: skin ? 'CURRENCY_cosmetic' : 'CURRENCY_champion',
       redeemableStatus: 'REDEEMABLE_RENTAL', itemStatus: 'NONE',
-      // u sampiona = id sampiona (jako u ostrych shardu), u skinu nepotrebujeme
-      // jako u ostrych shardu: u sampiona id sampiona, u skinu id skinu
+      // for a champion = the champion id (same as for real shards), for a skin we do not need it
+      // same as real shards: the champion id for a champion, the skin id for a skin
       storeItemId: Number((String(drop.lootId).match(/(\d+)$/) || [])[1] || 0),
       isTest: true,
     };
   }
 
-  /** Testovaci shardy do tabu Skiny a Sampioni. Prvni je schvalne vzacny. */
+  /** Test shards for the Skins and Champions tabs. The first one is rare on purpose. */
   async function shards() {
     const out = [];
     for (let i = 0; i < SHARD_IDS.length; i++) {
@@ -157,10 +159,10 @@ globalThis.TestChest = (function () {
   }
 
   /**
-   * Falesne recepty. Diky nim se testovaci shardy chovaji v UI presne jako
-   * ostre - tlacitka, vyber, actionbar - a lisi se az posledni krok v craft().
-   * Sloty schvalne obsahuji jen testovaci polozky, aby se do nich nikdy
-   * nemohla zamichat skutecna surovina.
+   * Fake recipes. Thanks to them test shards behave in the UI exactly like real
+   * ones - buttons, selection, action bar - and only the last step in craft()
+   * differs. The slots deliberately contain test items only, so a real
+   * ingredient can never end up in them.
    */
   function recipesFor(item) {
     if (item.lootId === CHAMP_ID) {
@@ -192,8 +194,9 @@ globalThis.TestChest = (function () {
   }
 
   /**
-   * Nahrada za craft na klientovi. Vraci stejny tvar odpovedi
-   * ({ added, removed, redeemed }), takze zbytek appky nepozna rozdil.
+   * Stands in for a craft on the client. It returns the same shape of response
+   * ({ added, removed, redeemed }), so the rest of the app cannot tell the
+   * difference.
    */
   async function simulateCraft(recipeName, items, repeat) {
     const name = String(recipeName || '').toLowerCase();
@@ -227,14 +230,14 @@ globalThis.TestChest = (function () {
       }
     }
 
-    // at je videt, ze se neco deje - klient by taky chvili premyslel
+    // so something visibly happens - the client would think for a moment too
     await new Promise((r) => setTimeout(r, 220));
     return { added, removed: [], redeemed: [] };
   }
 
-  // --- verejne API ------------------------------------------------------
+  // --- public API -------------------------------------------------------
 
-  /** Polozka do inventare. `isTest` ji drzi mimo vsechny ostre cesty v app.js. */
+  /** An inventory item. `isTest` keeps it out of every real path in app.js. */
   function item() {
     return {
       lootId: LOOT_ID, lootName: LOOT_ID, itemDesc: 'Test chest',
@@ -245,7 +248,7 @@ globalThis.TestChest = (function () {
     };
   }
 
-  /** Vylosuje odmeny za `count` beden. `onlyRare` vynuti vzacny skin (jackpot). */
+  /** Rolls the rewards for `count` chests. `onlyRare` forces a rare skin (jackpot). */
   async function roll(count, onlyRare) {
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -258,7 +261,7 @@ globalThis.TestChest = (function () {
     return out;
   }
 
-  /** Testovaci nabidka do mythic shopu - vzacny skin, nakup se jen simuluje. */
+  /** A test offer for the Mythic Shop - a rare skin; the purchase is only simulated. */
   async function shopOffer() {
     const d = await rollSkin(true);
     return {

@@ -1,8 +1,9 @@
 'use strict';
 
 /*
- * Kolekce: prehled vlastnenych veci ze serveru (nezavisle proti inventari
- * klienta) a jeho vykresleni. Potrebuje server (novou verzi) a klienta.
+ * The collection: the summary of owned things from the server (checked
+ * independently against the client's inventory) and how it is rendered.
+ * Needs the server (a current build) and the client.
  */
 
 const { createEnv, clientStatus, suite, BASE } = require('./harness');
@@ -90,7 +91,7 @@ const KINDS = ['champions', 'skins', 'chromas', 'emotes', 'icons', 'wards', 'fin
   t.ok(S.collection.kind === 'skins' && app.collectionItems().length === champWithSkins.skins,
     `klik na ${champWithSkins.name}: jeho ${champWithSkins.skins} skinu`);
 
-  // kratke jmeno, ktere je zaroven zacatkem jinych jmen ("Vi" -> Viego, Victorious)
+  // a short name that also starts other names ("Vi" -> Viego, Victorious)
   const shortChamp = col.champions.filter((c) => c.skins > 0 && col.skins.some((sk) => sk.championId !== c.id && sk.name.toLowerCase().includes(c.name.toLowerCase())))[0];
   if (shortChamp) {
     app.setCollection('q', shortChamp.name.toLowerCase());
