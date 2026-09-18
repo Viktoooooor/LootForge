@@ -1244,6 +1244,13 @@ function championName(id) {
   return state.champions[id] || '';
 }
 
+/** Ma hrac tenhle skin? (kolekce je presnejsi, ownedSkins staci jako zaloha) */
+function ownsSkin(skinId) {
+  const data = state.collection.data;
+  if (data) return data.skins.some((x) => x.id === skinId);
+  return ownedSkinsFor(Math.floor(skinId / 1000)).some((x) => x.id === skinId);
+}
+
 function ownedSkinsFor(championId) {
   return state.ownedSkins[championId] || [];
 }
@@ -1647,6 +1654,18 @@ function swatchCss(colors) {
   return a === b ? a : `linear-gradient(135deg, ${a} 50%, ${b} 50%)`;
 }
 
+/**
+ * Poznamka pod chromou. `stillObtainable: false` znamena "neni v obchode se
+ * skiny" - jenze prave ted muze byt v mythic shopu, a rict u ni "no longer
+ * available" by bylo matouci.
+ */
+function chromaNote(c) {
+  if (c.owned) return '';
+  const offer = shopEntries().find((e) => e.chromaId === c.id && !e.owned);
+  if (offer) return `<div class="chroma-note is-shop">Mythic Shop &middot; ${offer.price}</div>`;
+  return c.obtainable ? '' : '<div class="chroma-note">no longer available</div>';
+}
+
 function chromasHtml(ctx) {
   const list = ctx.chromas;
   if (list === null) return '<div class="chromas"><div class="skins-none">Loading chromas…</div></div>';
@@ -1661,7 +1680,7 @@ function chromasHtml(ctx) {
           ${c.owned ? '<span class="chroma-check" title="Owned"><i></i></span>' : ''}
         </div>
         <div class="chroma-name"><span class="swatch" style="background:${swatchCss(c.colors)}"></span>${escapeHtml(c.name)}</div>
-        ${!c.owned && !c.obtainable ? '<div class="chroma-note">no longer available</div>' : ''}
+        ${chromaNote(c)}
       </div>`).join('')}
     </div>
   </div>`;
@@ -1732,6 +1751,8 @@ async function loadShop() {
   state.shop.loading = true;
   state.shop.error = null;
   renderShop();
+  // bez kolekce bychom u chrom nevedeli, jestli hrac ma jejich skin
+  if (!state.collection.data && !state.collection.loading) loadCollection().catch(() => {});
   try {
     const res = await fetch('/api/mythic-shop');
     if (!res.ok) throw new Error(res.status === 503 ? 'The client is not running.' : `Could not load the shop (${res.status}).`);
@@ -1809,7 +1830,14 @@ function shopCardHtml(e) {
   else if (!enough) action = `<button disabled>Need ${(e.price - me).toLocaleString('en-US')} more</button>`;
   else action = `<button data-action="buy:${escapeHtml(e.catalogEntryId)}">Buy</button>`;
 
-  return `<div class="card shop-card ${e.owned ? 'is-owned' : ''} ${e.isTest ? 'card-test' : ''}">
+  // chroma bez skinu je k nicemu - at to hrac vidi driv, nez utrati esenci
+  const needsSkin = e.kind === 'chroma' && e.skinId
+    ? `<div class="shop-need ${ownsSkin(e.skinId) ? 'is-ok' : 'is-missing'}">${ownsSkin(e.skinId)
+      ? `You own ${escapeHtml(e.skinName || 'the skin')}`
+      : `Needs ${escapeHtml(e.skinName || 'its skin')} - you don't own it`}</div>`
+    : '';
+
+  return `<div class="card shop-card ${e.owned ? 'is-owned' : ''} ${e.isTest ? 'card-test' : ''}" ${e.skinId ? `data-shop-skin="${e.skinId}" ${e.chromaId ? `data-shop-chroma="${e.chromaId}" ` : ''}title="Show the skin"` : ''}>
     <div class="card-img ${contain ? 'contain' : ''}">
       ${img ? `<img src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<span class="card-glyph">${glyph({ itemDesc: e.name })}</span>`}
       ${e.rarity && e.rarity !== 'DEFAULT' ? `<img class="shop-gem" src="${Reel.GEM(e.rarity)}" alt="${e.rarity}" title="${e.rarity}">` : ''}
@@ -1820,6 +1848,7 @@ function shopCardHtml(e) {
     <div class="card-body">
       <div class="card-name">${escapeHtml(e.name)}</div>
       <div class="card-meta">${SHOP_KIND[e.kind] || 'Item'}</div>
+      ${needsSkin}
       <div class="shop-price ${enough ? '' : 'is-short'}"><img src="${ME_ICON}" alt=""><b>${e.price}</b></div>
       <div class="card-actions">${action}</div>
     </div>
@@ -2428,6 +2457,31 @@ function openCollectionSkin(skinId, chromaId) {
   return opened;
 }
 
+/**
+ * Nahled skinu, ktery hrac nemusi vlastnit - pouziva ho obchod. Jmeno, raritu
+ * a celou kresbu doda server z hernich dat (/api/skin/{id}).
+ */
+async function openSkinPreview(skinId, chromaId) {
+  const own = (state.collection.data ? state.collection.data.skins : []).find((x) => x.id === skinId)
+    || ownedSkinsFor(Math.floor(skinId / 1000)).find((x) => x.id === skinId);
+  let art = own ? { name: own.name, rarity: own.rarity, splash: own.splash, championName: championName(Math.floor(skinId / 1000)) } : null;
+  if (!art) {
+    try {
+      const res = await fetch('/api/skin/' + skinId);
+      if (res.ok) art = await res.json();
+    } catch (_) { /* nize se to vzda */ }
+  }
+  if (!art) return toast('This skin has no preview.', true);
+
+  const ctx = showDetail({
+    item: null, skinId, name: art.name, rarity: art.rarity || 'DEFAULT',
+    tile: '', centered: art.splash ? '/lcu' + art.splash : '',
+    championId: Math.floor(skinId / 1000), championName: art.championName || '',
+  });
+  if (chromaId && detailCtx) detailCtx.chromaLoad.then(() => { if (detailCtx && detailCtx.skinId === skinId) showChroma(chromaId); });
+  return ctx;
+}
+
 /** Chroma z kolekce: detail rodicovskeho skinu s rozkliknutou chromou. */
 function openCollectionChroma(chromaId) {
   const data = state.collection.data;
@@ -2758,6 +2812,9 @@ document.addEventListener('click', (e) => {
   if (colSkin) { openCollectionSkin(Number(colSkin.dataset.colSkin)); return; }
   const colChroma = e.target.closest('[data-col-chroma]');
   if (colChroma) { openCollectionChroma(Number(colChroma.dataset.colChroma)); return; }
+  const shopSkin = e.target.closest('[data-shop-skin]');
+  if (shopSkin) { openSkinPreview(Number(shopSkin.dataset.shopSkin), Number(shopSkin.dataset.shopChroma) || 0); return; }
+
   const colChamp = e.target.closest('[data-col-champ]');
   if (colChamp) {
     // sampion -> jeho skiny

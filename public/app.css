@@ -1115,3 +1115,18 @@ body.boot-open { overflow-y: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .boot, .boot * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; animation-delay: 0s !important; }
 }
+
+/* --- obchod: patri chroma ke skinu, ktery mam? --- */
+
+.shop-card[data-shop-skin] { cursor: zoom-in; }
+.shop-need {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; line-height: 1.4; padding: 4px 7px; border-radius: 3px;
+  border: 1px solid var(--line); background: rgba(10,20,30,.6); color: var(--text-dim);
+}
+.shop-need::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: currentColor; }
+.shop-need.is-ok { color: #6fe3b6; border-color: color-mix(in srgb, var(--owned) 45%, var(--line)); }
+.shop-need.is-missing { color: #ffb3b3; border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+
+/* chroma, ktera je prave v mythic shopu - ne "no longer available" */
+.chroma-note.is-shop { color: var(--r-mythic); }

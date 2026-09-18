@@ -28,7 +28,8 @@ First public release.
   extra shards.
 - **Skin details**: uncropped splash art, chromas, your other skins for that
   champion and video previews by SkinSpotlights (optional YouTube Data API key).
-- **Mythic Shop** with current rotations and purchasing (experimental).
+- **Mythic Shop** with current rotations and purchasing (experimental), skin and
+  chroma previews, and a warning when a chroma belongs to a skin you don't own.
 - **Collection**: skins, champions, chromas, emotes, icons, wards and Nexus
   Finishers with completion percentages.
 - **Stats**: chests opened, rarity distribution, essence gained and spent,

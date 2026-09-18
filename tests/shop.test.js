@@ -42,7 +42,8 @@ const t = suite('shop');
   t.section('vykresleni');
   const env = createEnv();
   const app = env.load(['reel.js', 'simulator.js', 'app.js'],
-    ['state', 'loadLoot', 'loadShop', 'renderShop', 'shopEntries', 'buyOffer', 'purchase', 'countOf']);
+    ['state', 'loadLoot', 'loadShop', 'renderShop', 'shopEntries', 'buyOffer', 'purchase', 'countOf',
+      'loadCollection', 'openSkinPreview', 'ownsSkin', 'closeDetail']);
   const $ = env.pick;
   env.mem['lootforge.fast'] = '1';
   await app.loadLoot();
@@ -67,6 +68,47 @@ const t = suite('shop');
   t.ok(/is-owned[\s\S]*?OWNED[\s\S]*?<button disabled>Owned<\/button>/.test(html2), 'vlastnena nabidka: paska OWNED a nejde koupit');
   t.ok(new RegExp(`<button disabled>Need 50 more</button>`).test(html2), 'nedostatek esence: rekne kolik chybi');
   t.ok(/ends in 1 d/.test(html2), 'odpocet konce rotace');
+
+  t.section('nahled skinu a chromy');
+  const shopSkins = entries.filter((e) => e.kind === 'skin');
+  const shopChromas = entries.filter((e) => e.kind === 'chroma');
+  t.ok(shopSkins.every((e) => e.skinId > 0 && /uncentered/.test(e.splash || '')), `skiny v obchode maji id a celou kresbu (${shopSkins.length})`);
+  t.ok(shopChromas.every((e) => e.chromaId > 0 && e.skinId > 0 && e.skinName), `chromy vedi, na jaky skin patri (${shopChromas.length})`);
+  t.ok(shopChromas.every((e) => Math.floor(e.skinId / 1000) === Math.floor(e.chromaId / 1000)), 'chroma a jeji skin maji stejneho sampiona');
+
+  await app.loadCollection();
+  app.renderShop();
+  const shopHtml = $('#grid-shop').innerHTML;
+  t.ok((shopHtml.match(/data-shop-skin="/g) || []).length === shopSkins.length + shopChromas.length, 'skiny i chromy jdou v obchode rozkliknout');
+
+  if (shopChromas.length) {
+    const ownedChromas = shopChromas.filter((e) => app.ownsSkin(e.skinId));
+    t.info(`chromy: ${ownedChromas.length} k vlastnenym skinum, ${shopChromas.length - ownedChromas.length} k nevlastnenym`);
+    t.ok((shopHtml.match(/shop-need is-missing/g) || []).length === shopChromas.length - ownedChromas.length
+      && (shopHtml.match(/shop-need is-ok/g) || []).length === ownedChromas.length,
+      'u kazde chromy je videt, jestli mas jeji skin');
+    const miss = shopChromas.find((e) => !app.ownsSkin(e.skinId));
+    if (miss) {
+      t.ok(shopHtml.includes(`Needs ${miss.skinName} - you don't own it`), `varovani u "${miss.name}"`);
+    }
+  }
+
+  const preview = shopSkins.find((e) => !app.ownsSkin(e.skinId)) || shopSkins[0];
+  const pctx = await app.openSkinPreview(preview.skinId);
+  t.ok(pctx && !$('#detail').hidden && pctx.skinId === preview.skinId, `nahled skinu z obchodu: ${pctx && pctx.name}`);
+  t.ok(/uncentered/.test($('#detail-img').dataset.want || $('#detail-img').src), 'cely splash i u skinu, ktery nemas');
+  t.ok(env.posts.length === 0, 'nahled nic nezapisuje');
+  app.closeDetail();
+
+  if (shopChromas.length) {
+    const c = shopChromas[0];
+    const cctx = await app.openSkinPreview(c.skinId, c.chromaId);
+    await cctx.chromaLoad;
+    await new Promise((r) => setTimeout(r, 30));
+    t.ok(cctx.chromaView === c.chromaId && $('#detail-art').classList.contains('is-chroma'), `klik na chromu v obchode ukaze ${c.name}`);
+    t.ok($('#detail-chromas').innerHTML.includes(`Mythic Shop &middot; ${c.price}`), 'chroma z obchodu ma misto "no longer available" cenu');
+    app.closeDetail();
+  }
 
   t.section('nakup - testovaci nabidka');
   await app.buyOffer('TEST_OFFER');

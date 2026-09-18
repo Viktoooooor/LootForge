@@ -33,11 +33,17 @@ and a browser.
   </tr>
   <tr>
     <td><img src="docs/screenshots/clean-up.jpg" alt="Clean up rules"></td>
-    <td><img src="docs/screenshots/connecting.jpg" alt="Waiting for the League client"></td>
+    <td><img src="docs/screenshots/mythic-shop.jpg" alt="Mythic Shop chromas warning that you don't own the skin"></td>
   </tr>
   <tr>
     <td>Bulk disenchanting by rules, with everything listed before you confirm.</td>
-    <td>LootForge waits for the client and connects on its own.</td>
+    <td>The Mythic Shop tells you when a chroma is for a skin you don't own.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/connecting.jpg" alt="Waiting for the League client"></td>
+  </tr>
+  <tr>
+    <td colspan="2">LootForge waits for the client and connects on its own.</td>
   </tr>
 </table>
 
@@ -52,7 +58,7 @@ and a browser.
 | **Starred shards** | Star a shard to protect it: clean up, *Select all* and *Suggest 3* never take it, starred shards are listed first, and disenchanting one by hand warns you. |
 | **Clean up** | Disenchant in bulk by rules: shards and permanents of champions you own, extra copies (one copy is always kept), duplicate wards, emotes and icons. Skin shards are off by default because rerolling them is usually better. Click an item to keep it. |
 | **Skin details** | Full, uncropped splash art, chromas (owned ones are ticked, click one to see the model), your other skins for that champion and a video preview by SkinSpotlights. |
-| **Mythic Shop** | Current rotations with images, rarity gems and countdowns. You can buy with Mythic Essence. |
+| **Mythic Shop** | Current rotations with images, rarity gems and countdowns. Click any skin or chroma to see its full splash art, and chromas say whether you own the skin they belong to - buying one without it is wasted essence. You can buy with Mythic Essence. |
 | **Collection** | Everything you own: skins, champions, chromas, emotes, icons, wards and Nexus Finishers, with your completion percentage. |
 | **Stats** | Chests opened, skin shards per chest, rarity distribution, essence gained and spent, rerolls, unlocks and a history. You can export them to JSON. |
 | **Connection screen** | Waits for the League client with an animated emblem, tells you what to do if the client isn't running, and greets you by your Riot ID once it connects. It comes back if the client closes. |

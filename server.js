@@ -368,9 +368,15 @@ async function gameIndex(port) {
       kind: 'skin', img: sk.tilePath || sk.splashPath || '',
       rarity: SKIN_RARITY[sk.rarity] || 'DEFAULT',
       splash: sk.uncenteredSplashPath || '',   // cela kresba pro obrad po nakupu
+      skinId: sk.id,                           // aby sel v obchode otevrit nahled
     });
     for (const ch of sk.chromas || []) {
-      add(ch.contentId, { kind: 'chroma', img: ch.chromaPath || ch.tilePath || '', rarity: 'DEFAULT' });
+      // u chromy je klicove, na jaky skin patri: bez nej je k nicemu
+      add(ch.contentId, {
+        kind: 'chroma', img: ch.chromaPath || ch.tilePath || '', rarity: 'DEFAULT',
+        chromaId: ch.id, skinId: sk.id,
+        skinName: sk.isBase ? (championNames[Math.floor(sk.id / 1000)] || sk.name) : sk.name,
+      });
       meta.chroma.set(ch.id, {
         name: ch.name, img: ch.chromaPath || ch.tilePath || '', skinId: sk.id,
         colors: (ch.colors || []).filter((x) => /^#[0-9a-f]{3,8}$/i.test(x)),
@@ -437,6 +443,9 @@ async function mythicShop(creds) {
           kind: meta.kind,
           img: meta.img,
           ...(meta.splash ? { splash: meta.splash } : {}),
+          ...(meta.skinId ? { skinId: meta.skinId } : {}),
+          ...(meta.chromaId ? { chromaId: meta.chromaId } : {}),
+          ...(meta.skinName ? { skinName: meta.skinName } : {}),
           rarity: meta.rarity,
           price: pay.finalDelta != null ? pay.finalDelta : pay.delta,
           paymentKey: option.key,
