@@ -2635,17 +2635,40 @@ function openSettings() {
   document.body.classList.add('detail-open');
 }
 
-function renderUpdateStatus() {
+function renderUpdateStatus(note) {
   const el = $('#update-status');
   const app = state.app;
+  const link = $('#update-link');
+  const button = $('#update-now');
   if (!app) { el.textContent = ''; return; }
-  if (!app.repo) { el.textContent = `You have v${app.version}. This build has no release page to check.`; return; }
+
   const info = readStore('lootforge.update', null);
+  const newer = !!(info && info.repo === app.repo && isNewerVersion(info.latest, app.version));
+  link.hidden = !newer;
+  if (newer) link.href = (info && info.url) || `https://github.com/${app.repo}/releases/latest`;
+  button.disabled = !app.repo || note === 'checking';
+  button.textContent = note === 'checking' ? 'Checking…' : 'Check now';
+
+  if (!app.repo) { el.textContent = `You have v${app.version}. This build has no release page to check.`; return; }
+  if (note === 'checking') { el.textContent = 'Asking GitHub for the latest release…'; return; }
+  if (note === 'failed') { el.textContent = `Could not reach GitHub. You have v${app.version}.`; return; }
   el.textContent = info && info.repo === app.repo
-    ? (isNewerVersion(info.latest, app.version)
+    ? (newer
       ? `v${info.latest} is available (you have v${app.version}).`
       : `You have the latest version (v${app.version}).`)
     : `You have v${app.version}.`;
+}
+
+/** The "Check now" button - ask right away, without waiting for the 12-hour interval. */
+async function checkUpdatesNow() {
+  if (!state.app || !state.app.repo) return;
+  renderUpdateStatus('checking');
+  try {
+    await checkForUpdates(true);
+    renderUpdateStatus();
+  } catch (_) {
+    renderUpdateStatus('failed');
+  }
 }
 
 function closeSettings() {
@@ -2933,6 +2956,7 @@ $('#settings').addEventListener('click', (e) => { if (e.target === e.currentTarg
 $('#yt-key-save').addEventListener('click', () => saveYoutubeKey($('#yt-key').value));
 $('#yt-key-clear').addEventListener('click', () => saveYoutubeKey(''));
 $('#test-items').addEventListener('change', (e) => setTestItems(e.target.checked));
+$('#update-now').addEventListener('click', checkUpdatesNow);
 $('#update-check').addEventListener('change', (e) => {
   try { localStorage.setItem('lootforge.updates', e.target.checked ? '1' : '0'); } catch (_) { /* just a convenience */ }
   if (e.target.checked) checkForUpdates().then(renderUpdateStatus, renderUpdateStatus);

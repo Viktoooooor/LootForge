@@ -103,7 +103,8 @@ Clone the repository and double-click **`start.cmd`**, or run `npm start` /
 
 LootForge checks GitHub for a newer release at most twice a day and shows a
 *vX.Y.Z available* button in the top bar. It never downloads or installs anything
-by itself. You can turn the check off in *Settings*. See [CHANGELOG.md](CHANGELOG.md)
+by itself - it only points you at the release page. In *Settings* you can check
+right away with **Check now**, or turn the automatic check off. See [CHANGELOG.md](CHANGELOG.md)
 for what changed in each version.
 
 ### Controls

@@ -92,7 +92,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   const env = createEnv({ testItems: false });
   delete env.mem['lootforge.welcome'];
   delete env.mem['lootforge.testItems'];
-  const lf = env.load(['reel.js', 'simulator.js', 'app.js'], ['state', 'loadLoot', 'loadShop', 'setTestItems', 'acceptWelcome', 'isNewerVersion', 'checkForUpdates']);
+  const lf = env.load(['reel.js', 'simulator.js', 'app.js'], ['state', 'loadLoot', 'loadShop', 'setTestItems', 'acceptWelcome', 'isNewerVersion', 'checkForUpdates', 'checkUpdatesNow', 'renderUpdateStatus']);
   const $ = env.pick;
   await sleep(50);
   t.ok(!$('#welcome').hidden, 'prvni spusteni: uvodni upozorneni');
@@ -140,6 +140,13 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   release = { tag_name: 'v1.3.0', html_url: 'https://evil.example/LootForge.exe' };
   await lf.checkForUpdates(true);
   t.ok($('#update').href === 'https://github.com/someone/LootForge/releases/latest', 'odkaz mimo vlastni repo se nahradi strankou releasu');
+
+  // tlacitko "Check now" v Nastaveni: zepta se hned, i kdyz je odpoved v pameti
+  const callsBefore = ghCalls.length;
+  await lf.checkUpdatesNow();
+  t.ok(ghCalls.length === callsBefore + 1, 'Check now se zepta hned, necheka na 12 hodin');
+  t.ok(!$('#update-link').hidden && /1.3.0 is available/.test($('#update-status').textContent), 'stav a odkaz na stazeni v Nastaveni');
+  t.ok($('#update-now').textContent === 'Check now' && !$('#update-now').disabled, 'tlacitko se po dokonceni vrati do puvodniho stavu');
 
   release = { tag_name: 'v1.0.0', html_url: 'https://github.com/someone/LootForge/releases/tag/v1.0.0' };
   await lf.checkForUpdates(true);

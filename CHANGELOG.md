@@ -41,7 +41,8 @@ First public release.
   it quits by itself after its browser tab is closed.
 - Connection screen that waits for the League client and greets you once connected.
 - App icon in the browser tab.
-- Update check: tells you when a newer release is available on GitHub.
+- Update check: tells you when a newer release is available on GitHub, with a
+  Check now button in Settings. It never downloads or installs anything by itself.
 
 [Unreleased]: https://github.com/Viktoooooor/LootForge/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Viktoooooor/LootForge/releases/tag/v1.0.0
