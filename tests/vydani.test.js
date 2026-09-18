@@ -36,6 +36,8 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
   t.ok(cssTexts.length > 0 && czechCss.length === 0, czechCss.length ? `cestina v CSS content: ${czechCss.join(', ')}` : `texty v CSS anglicky (${cssTexts.join(', ')})`);
   t.ok(!/'cs-CZ'|, 'cs'\)/.test(app), 'cisla a razeni v anglicke lokalizaci');
   t.ok(/lang="en"/.test(html), 'html lang="en"');
+  const icon = /<link rel="icon"[^>]*href="([^"]+)"/.exec(html);
+  t.ok(icon && fs.existsSync(path.join(PUBLIC, icon[1])), `ikona v zalozce prohlizece: ${icon && icon[1]}`);
 
   t.section('pravni nalezitosti');
   const disclaimer = /isn't endorsed by Riot Games and doesn't\s+reflect the views or opinions of Riot Games/;

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LootForge">
+  <title>LootForge</title>
+  <defs>
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c3a4a"/>
+      <stop offset="1" stop-color="#0b1822"/>
+    </linearGradient>
+  </defs>
+  <!-- tmavy podklad, at je ikona videt i na svetle liste -->
+  <rect width="64" height="64" rx="13" fill="#070d14"/>
+  <g transform="rotate(45 32 32)">
+    <!-- zlaty kosoctverec jako jadro z uvodni obrazovky -->
+    <rect x="16" y="16" width="32" height="32" rx="3" fill="url(#core)" stroke="#c8aa6e" stroke-width="5"/>
+    <!-- tyrkysove jadro; pri 16 px z nej zbyde citelna tecka -->
+    <rect x="26" y="26" width="12" height="12" rx="1" fill="#0ac8b9"/>
+  </g>
+</svg>

@@ -39,6 +39,7 @@ First public release.
 - `LootForge.exe`: runs without installing Node.js and without a console window;
   it quits by itself after its browser tab is closed.
 - Connection screen that waits for the League client and greets you once connected.
+- App icon in the browser tab.
 - Update check: tells you when a newer release is available on GitHub.
 
 [Unreleased]: https://github.com/Viktoooooor/LootForge/compare/v1.0.0...HEAD
