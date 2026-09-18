@@ -254,7 +254,6 @@ public/
 tests/           test runner, harness and test files
 ```
 
-Internal developer notes (in Czech) are in [`CLAUDE.md`](CLAUDE.md).
 
 ## Credits
 
