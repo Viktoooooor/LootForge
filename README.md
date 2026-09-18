@@ -43,11 +43,11 @@ exception is opening chests, because that is the whole point of the app.
 
 ## Getting started
 
-1. Download `LootForge-<version>-windows-x64.zip` from the latest release and
-   extract it anywhere.
+1. Download **`LootForge.exe`** from the latest release. (The ZIP next to it is
+   the same program with the README, licence and changelog alongside it.)
 2. Start the League client and log in. You don't need to be in a game.
-3. Double-click **`LootForge.exe`**. Your browser opens LootForge at
-   `http://127.0.0.1:4545`.
+3. Double-click **`LootForge.exe`** (it needs no installation and writes nothing
+   next to itself). Your browser opens LootForge at `http://127.0.0.1:4545`.
 
 There is no console window. LootForge shows a connection screen until the
 League client is ready (you can start the client later), and **quits by itself
@@ -193,8 +193,9 @@ To point them at another server, use `LOOTFORGE_URL=http://127.0.0.1:4546`.
 npm run build
 ```
 
-This creates `dist/LootForge.exe` and `dist/LootForge-<version>-windows-x64.zip`
-(exe, README, LICENSE, CHANGELOG) for a GitHub release. It uses Node's built-in
+This creates `dist/LootForge.exe` (with the licence bundled inside, readable at
+`/LICENSE` in the app) and `dist/LootForge-<version>-windows-x64.zip` with the
+README, LICENSE and CHANGELOG alongside it. Attach both to a GitHub release. It uses Node's built-in
 [single executable applications](https://nodejs.org/api/single-executable-applications.html)
 (Node.js 20.12 or newer) and downloads the official `postject` tool through `npx`
 during the build. LootForge itself still has no dependencies.

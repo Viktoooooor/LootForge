@@ -662,6 +662,13 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === '/api/events') return handleEvents(req, res);
 
+  // licence i v exe, kde neni zadny soubor vedle - odkaz je v paticce appky
+  if (req.url === '/LICENSE') {
+    const body = readAppFile('LICENSE');
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length });
+    return res.end(body);
+  }
+
   // detail jednoho skinu (i zakladniho = sampion): cely splash, jmeno, rarita
   const skinMatch = /^\/api\/skin\/(\d{1,7})$/.exec(req.url);
   if (skinMatch) {

@@ -80,7 +80,8 @@ const t = suite('pohodli');
 
   if (realSkins.length >= 4) {
     // shard, ktery by "Suggest 3" jinak vzal nejdriv
-    const cheapest = realSkins.slice().sort((a, b) => (b.redeemableStatus === 'ALREADY_OWNED') - (a.redeemableStatus === 'ALREADY_OWNED') || a.disenchantValue - b.disenchantValue)[0];
+    // jiny nez uz oznaceny - jinak by druhy toggle hvezdicku zase sundal
+    const cheapest = realSkins.filter((i) => i !== star).sort((a, b) => (b.redeemableStatus === 'ALREADY_OWNED') - (a.redeemableStatus === 'ALREADY_OWNED') || a.disenchantValue - b.disenchantValue)[0];
     app.toggleFavorite(cheapest.lootId);
     app.suggestReroll();
     t.ok(S.selected.size === 3 && !S.selected.has(cheapest.lootId) && !S.selected.has(star.lootId), 'Suggest 3 oznacene nenavrhne');

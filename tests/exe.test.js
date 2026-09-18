@@ -71,6 +71,12 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
     const post = await fetch(URL_BASE + '/lcu/lol-loot/v1/lootforge-test-neexistuje', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '[]' });
     t.ok(post.status === 403, `zapis bez Origin odmitnut i v exe: ${post.status}`);
 
+    // u starsiho exe by chybely i veci pridane po buildu - kontrolovat jen aktualni
+    const licence = await fetch(URL_BASE + '/LICENSE');
+    const hasLicence = licence.ok && /MIT License/.test(await licence.text());
+    if (stale.length) t.info(`licence v exe: ${hasLicence ? 'ano' : 'ne'} (exe je starsi nez zdrojaky)`);
+    else t.ok(hasLicence, 'licence je primo v exe (/LICENSE), aby slo sirit samotne');
+
     t.section('log a samo-ukonceni');
     const logFile = path.join(process.env.LOCALAPPDATA || '', 'LootForge', 'lootforge.log');
     const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';

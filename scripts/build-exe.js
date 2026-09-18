@@ -40,12 +40,24 @@ const FUSE = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 function step(msg) { console.log(`\n> ${msg}`); }
 
 /*
- * Antivirus (Defender) si cerstve zapsane exe na par vterin zamkne ke kontrole.
- * Mazani i baleni do zipu pak spadne na EPERM - chvili pockat a zkusit znovu.
+ * Soubor muze byt zamceny ze dvou duvodu: antivirus si cerstve exe na par vterin
+ * zamkne ke kontrole (staci pockat), nebo LootForge.exe prave bezi (to musi
+ * zavrit uzivatel - proto to radeji rekneme, nez zkouset osmkrat to same).
  */
+function running() {
+  try {
+    return /LootForge\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq LootForge.exe'], { encoding: 'utf8' }));
+  } catch (_) { return false; }
+}
+
 function retry(what, fn) {
   for (let attempt = 1; ; attempt++) {
     try { return fn(); } catch (err) {
+      if (running()) {
+        console.error(`\nLootForge.exe prave bezi, proto ho nejde prepsat.\n` +
+          `Zavri jeho zalozku v prohlizeci (za chvili skonci sam), nebo ukonci proces, a spust build znovu.\n`);
+        process.exit(1);
+      }
       if (attempt >= 8) throw err;
       console.log(`  ${what}: soubor je zamceny (nejspis antivirus), zkousim znovu za 2 s…`);
       execFileSync(process.execPath, ['-e', 'setTimeout(() => {}, 2000)']);
@@ -64,7 +76,11 @@ if (major < 20 || (major === 20 && minor < 12)) {
 }
 
 step('assety');
-const assets = { 'package.json': path.join(ROOT, 'package.json') };
+const assets = {
+  'package.json': path.join(ROOT, 'package.json'),
+  // MIT: text licence musi jit s programem, at se siri jen samotne exe
+  LICENSE: path.join(ROOT, 'LICENSE'),
+};
 (function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
