@@ -12,6 +12,35 @@ and a browser.
 > actual account. See [Safety](#safety) and [Is this allowed?](#is-this-allowed)
 > before you use it.
 
+![Opening five chests: five reels, each landing a moment after the one before](docs/screenshots/reveal.jpg)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/summary.jpg" alt="Summary of everything that dropped"></td>
+    <td width="50%"><img src="docs/screenshots/skin-details.jpg" alt="Skin details with the full splash art and chromas"></td>
+  </tr>
+  <tr>
+    <td>Every drop in one summary when a batch finishes.</td>
+    <td>Full splash art, chromas and your other skins for that champion.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/skin-shards.jpg" alt="Skin shards with filters"></td>
+    <td><img src="docs/screenshots/collection.jpg" alt="Collection with completion percentages"></td>
+  </tr>
+  <tr>
+    <td>Shards with search, filters and sorting.</td>
+    <td>Your whole collection with completion percentages.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/clean-up.jpg" alt="Clean up rules"></td>
+    <td><img src="docs/screenshots/connecting.jpg" alt="Waiting for the League client"></td>
+  </tr>
+  <tr>
+    <td>Bulk disenchanting by rules, with everything listed before you confirm.</td>
+    <td>LootForge waits for the client and connects on its own.</td>
+  </tr>
+</table>
+
 ## Features
 
 | | |

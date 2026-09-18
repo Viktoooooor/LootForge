@@ -27,6 +27,10 @@
 .reel-stage {
   position: relative; width: 100%;
   display: flex; flex-direction: column; gap: 14px;
+  /* Zare (.cine-glow) schvalne presahuje o 20 % nad i pod scenu. Vizualne ji
+     orizne .reveal, ale do rolovatelne vysky se pocitala - pri peti pasech pak
+     odhaleni dostalo svisly posuvnik. `clip` orizne bez scroll kontejneru. */
+  overflow: clip;
 }
 .reel-stage.is-hit, .cascade-stage.is-hit { animation: stage-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
 @keyframes stage-shake {
@@ -232,7 +236,7 @@
 /*  KASKADA                                                               */
 /* ====================================================================== */
 
-.cascade-stage { position: relative; padding: 10px 22px 0; }
+.cascade-stage { position: relative; padding: 10px 22px 0; overflow: clip; }
 .cascade-grid {
   position: relative; z-index: 1;
   display: grid; gap: 14px;
